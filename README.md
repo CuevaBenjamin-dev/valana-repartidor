@@ -90,6 +90,10 @@ Para preparar Hostinger más adelante, copiar `.env.production.example` a `/opt/
 
 Para el futuro frontend `https://valana.bostonbbs.com` con API `https://api.bostonbbs.com`, configurar `WEB_ORIGIN` con el origen del frontend, `NEXT_PUBLIC_API_URL` con la API HTTPS, `NODE_ENV=production` y `COOKIE_DOMAIN=.bostonbbs.com` para que el navegador pueda leer la cookie CSRF desde el frontend. La cookie de sesión permanece restringida al host de la API. No se ha realizado ningún despliegue ni cambio DNS.
 
+### Compilación del frontend para Cloudflare Pages
+
+El panel se exporta como archivos estáticos. Configurar Pages con raíz del repositorio, rama `main`, comando `npm run build -w apps/web` y directorio de salida `apps/web/out`. Definir `NEXT_PUBLIC_API_URL=https://api.bostonbbs.com` como variable de compilación. El archivo `.node-version` selecciona Node.js 24, requerido por el proyecto. El dominio previsto es `valana.bostonbbs.com`; asignarlo cuando se autorice el despliegue.
+
 ## Pruebas y compilación
 
 ```powershell
