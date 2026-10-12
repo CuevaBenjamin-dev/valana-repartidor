@@ -1,0 +1,13 @@
+.git
+.env
+.env.*
+!.env.example
+!.env.production.example
+.local
+node_modules
+**/node_modules
+**/.next
+**/out
+**/dist
+coverage
+*.log

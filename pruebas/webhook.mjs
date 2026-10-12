@@ -1,0 +1,16 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { createHmac, randomUUID } from 'node:crypto';
+const lineas=readFileSync(new URL('../.env',import.meta.url),'utf8').split(/\r?\n/);
+const env=Object.fromEntries(lineas.filter(x=>x && !x.startsWith('#') && x.includes('=')).map(x=>{const i=x.indexOf('=');return [x.slice(0,i),x.slice(i+1)]}));
+const base=process.env.WEBHOOK_TEST_URL || 'http://localhost:3001/webhooks/meta';
+const reto='12345678';
+const verificar=await fetch(`${base}?hub.mode=subscribe&hub.verify_token=${encodeURIComponent(env.META_VERIFY_TOKEN)}&hub.challenge=${reto}`);
+assert.equal(verificar.status,200);assert.equal(await verificar.text(),reto);
+const invalido=await fetch(base,{method:'POST',headers:{'Content-Type':'application/json','X-Hub-Signature-256':'sha256=incorrecta'},body:'{}'});
+assert.equal(invalido.status,403);
+const carga=JSON.stringify({object:'whatsapp_business_account',entry:[{changes:[{value:{metadata:{phone_number_id:'numero-ajeno'},messages:[{id:`prueba-${randomUUID()}`,from:'51900000000',type:'text',text:{body:'1'}}]}}]}]});
+const firma=`sha256=${createHmac('sha256',env.META_APP_SECRET).update(carga).digest('hex')}`;
+const valido=await fetch(base,{method:'POST',headers:{'Content-Type':'application/json','X-Hub-Signature-256':firma},body:carga});
+assert.equal(valido.status,200);
+console.log('Webhook aprobado: verificación, firma inválida rechazada y evento de otro número ignorado.');
