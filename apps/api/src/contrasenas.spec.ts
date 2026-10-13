@@ -5,10 +5,11 @@ import { validarFormatoClave, verificarClaveComprometida } from './contrasenas';
 afterEach(()=>vi.unstubAllGlobals());
 
 describe('cambio de contraseña',()=>{
-  it('aplica los requisitos distintos para asesor y administrador',()=>{
-    expect(()=>validarFormatoClave('Nueva!7','Nueva!7','asesor')).not.toThrow();
-    expect(()=>validarFormatoClave('Nueva!7','Nueva!7','administrador')).toThrow();
+  it('aplica la misma política de seis caracteres a asesor y administrador',()=>{
+    expect(()=>validarFormatoClave('Nueva!','Nueva!','asesor')).not.toThrow();
+    expect(()=>validarFormatoClave('Nueva!','Nueva!','administrador')).not.toThrow();
     expect(()=>validarFormatoClave('UnaClaveSegura!2026','UnaClaveSegura!2026','administrador')).not.toThrow();
+    expect(()=>validarFormatoClave('nueva!','nueva!','administrador')).toThrow();
     expect(()=>validarFormatoClave('Nueva!7','Diferente!7','asesor')).toThrow('no coinciden');
     expect(()=>validarFormatoClave('Password123!','Password123!','asesor')).toThrow('común');
   });

@@ -10,12 +10,8 @@ const comunes=new Set([
 export function validarFormatoClave(nueva:string,confirmacion:string,rol:string){
   if(nueva!==confirmacion)throw new ForbiddenException('Las contraseñas nuevas no coinciden');
   if(nueva.length>1024)throw new ForbiddenException('La contraseña es demasiado larga');
-  if(rol==='asesor'){
-    if(nueva.length<6 || !/[A-Z]/.test(nueva) || !/[^\p{L}\p{N}]/u.test(nueva))
-      throw new ForbiddenException('Usa al menos 6 caracteres, una mayúscula y un carácter especial');
-  }else if(nueva.length<14 || !/[a-z]/.test(nueva) || !/[A-Z]/.test(nueva) || !/\d/.test(nueva) || !/[^\p{L}\p{N}]/u.test(nueva)){
-    throw new ForbiddenException('Usa al menos 14 caracteres, mayúscula, minúscula, número y símbolo');
-  }
+  if(nueva.length<6 || !/[A-Z]/.test(nueva) || !/[^\p{L}\p{N}]/u.test(nueva))
+    throw new ForbiddenException('Usa al menos 6 caracteres, una mayúscula y un carácter especial');
   if(comunes.has(nueva.trim().toLowerCase()))throw new ForbiddenException('Esta contraseña es demasiado común');
 }
 

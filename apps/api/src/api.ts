@@ -38,8 +38,7 @@ export class PerfilController {
   }
   @Post('foto') @HttpCode(200)
   async subirFoto(@Req() req:SolicitudAutenticada,@Body() datos:unknown){
-    const tipo=String(req.headers['content-type']||'').split(';')[0].toLowerCase();
-    const imagen=await prepararFoto(datos,tipo);
+    const imagen=await prepararFoto(datos);
     const nombre=await guardarFoto(imagen);
     let anterior:string|null;
     try{

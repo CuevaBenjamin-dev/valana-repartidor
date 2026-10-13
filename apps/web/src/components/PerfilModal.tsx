@@ -32,13 +32,13 @@ export default function PerfilModal({perfil,fotoUrl,cerrar,guardar,subirFoto,qui
       <div className="profile-body">
         {error&&<div className="notice error" role="alert">{error}</div>}{exito&&<div className="notice success">{exito}</div>}
         {!vistaClave?<>
-          <div className="profile-photo-actions"><input ref={archivo} type="file" accept="image/jpeg,image/png,image/webp" hidden
+          <div className="profile-photo-actions"><input ref={archivo} type="file" accept="image/*,.heic,.heif" hidden
             onChange={e=>{const foto=e.currentTarget.files?.[0];if(!foto)return;e.currentTarget.value='';
-              if(foto.size>2*1024*1024 || !['image/jpeg','image/png','image/webp'].includes(foto.type)){setError('Elige una foto JPG, PNG o WebP de hasta 2 MB');return}
+              if(foto.size>3*1024*1024){setError('La fotografía debe pesar 3 MB o menos');return}
               void ejecutar(()=>subirFoto(foto),'Foto actualizada.')}}/>
             <button className="btn small" type="button" disabled={ocupado} onClick={()=>archivo.current?.click()}><Camera size={15}/>{fotoUrl?'Cambiar foto':'Subir foto'}</button>
             {fotoUrl&&<button className="btn small" type="button" disabled={ocupado} onClick={()=>void ejecutar(quitarFoto,'Foto eliminada.')}><Trash2 size={14}/>Eliminar foto</button>}
-            <small>JPG, PNG o WebP · máximo 2 MB</small>
+            <small>JPG, PNG, WebP, GIF, AVIF o HEIC/HEIF compatible · máximo 3 MB</small>
           </div>
           <form onSubmit={e=>{e.preventDefault();void ejecutar(()=>guardar({nombre:campos.nombre.trim(),apellidos:campos.apellidos.trim(),celular_personal:campos.celular_personal.trim()||null}),'Perfil actualizado.')}}>
             <div className="profile-fields"><label>Nombres<input ref={primerCampo} className="form-input" required minLength={2} maxLength={100} value={campos.nombre} onChange={e=>setCampos({...campos,nombre:e.target.value})}/></label>
@@ -49,9 +49,9 @@ export default function PerfilModal({perfil,fotoUrl,cerrar,guardar,subirFoto,qui
               <button className="btn" type="button" onClick={()=>{setError('');setExito('');setVistaClave(true)}}><KeyRound size={14}/>Cambiar contraseña</button></div>
           </form>
         </>:<form onSubmit={e=>{e.preventDefault();if(claves.nueva!==claves.confirmacion){setError('Las contraseñas nuevas no coinciden');return}void ejecutar(()=>cambiarClave(claves),'Contraseña actualizada. Inicia sesión nuevamente.')}}>
-          <p className="profile-help">{perfil.rol==='asesor'?'Mínimo 6 caracteres, una mayúscula y un carácter especial.':'Mínimo 14 caracteres, mayúscula, minúscula, número y símbolo.'}</p>
+          <p className="profile-help">Mínimo 6 caracteres, una mayúscula y un carácter especial.</p>
           <label className="profile-field">Contraseña actual<input ref={primerCampo} className="form-input" type="password" autoComplete="current-password" required value={claves.anterior} onChange={e=>setClaves({...claves,anterior:e.target.value})}/></label>
-          <label className="profile-field">Nueva contraseña<input className="form-input" type="password" autoComplete="new-password" minLength={perfil.rol==='asesor'?6:14} required value={claves.nueva} onChange={e=>setClaves({...claves,nueva:e.target.value})}/></label>
+          <label className="profile-field">Nueva contraseña<input className="form-input" type="password" autoComplete="new-password" minLength={6} required value={claves.nueva} onChange={e=>setClaves({...claves,nueva:e.target.value})}/></label>
           <label className="profile-field">Confirmar nueva contraseña<input className="form-input" type="password" autoComplete="new-password" required value={claves.confirmacion} onChange={e=>setClaves({...claves,confirmacion:e.target.value})}/></label>
           <div className="profile-footer"><button className="btn primary" disabled={ocupado}>Actualizar contraseña</button><button className="btn" type="button" onClick={()=>{setVistaClave(false);setError('');setClaves({anterior:'',nueva:'',confirmacion:''})}}>Volver al perfil</button></div>
         </form>}

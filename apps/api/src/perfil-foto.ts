@@ -5,25 +5,27 @@ import sharp from 'sharp';
 import { BadRequestException } from '@nestjs/common';
 
 const directorio=resolve(process.cwd(),'.local','fotos-perfil');
-const tipos:Record<string,string>={'image/jpeg':'jpeg','image/png':'png','image/webp':'webp'};
-const limite=2*1024*1024;
+const formatos=new Set(['jpeg','png','webp','gif','avif','heif']);
+const limite=3*1024*1024;
 
 function ruta(nombre:string){
   if(!/^[0-9a-f-]{36}\.webp$/.test(nombre))throw new Error('Nombre de fotografía inválido');
   return resolve(directorio,nombre);
 }
 
-export async function prepararFoto(datos:unknown,tipo:string):Promise<Buffer>{
-  if(!Buffer.isBuffer(datos) || datos.length===0 || datos.length>limite || !tipos[tipo])
-    throw new BadRequestException('Elige una foto JPG, PNG o WebP de hasta 2 MB');
+export async function prepararFoto(datos:unknown):Promise<Buffer>{
+  if(!Buffer.isBuffer(datos) || datos.length===0)
+    throw new BadRequestException('Selecciona una imagen válida');
+  if(datos.length>limite)
+    throw new BadRequestException('La fotografía debe pesar 3 MB o menos');
   try{
     const imagen=sharp(datos,{failOn:'error',limitInputPixels:16_000_000});
     const meta=await imagen.metadata();
-    if(meta.format!==tipos[tipo] || !meta.width || !meta.height || meta.width>5000 || meta.height>5000)
+    if(!meta.format || !formatos.has(meta.format) || !meta.width || !meta.height || meta.width>5000 || meta.height>5000)
       throw new Error('Formato o dimensiones inválidos');
     return await imagen.rotate().resize(512,512,{fit:'inside',withoutEnlargement:true})
       .webp({quality:82}).toBuffer();
-  }catch{throw new BadRequestException('La fotografía no es una imagen válida')}
+  }catch{throw new BadRequestException('La imagen está dañada o su formato no se puede procesar. Prueba JPG, PNG o WebP')}
 }
 
 export async function guardarFoto(datos:Buffer):Promise<string>{
