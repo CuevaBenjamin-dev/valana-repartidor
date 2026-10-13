@@ -19,7 +19,7 @@ sudo docker compose --env-file .env.production exec -T postgres pg_restore --lis
 chmod 600 "$respaldo"
 echo "Respaldo validado: $respaldo"
 
-git pull --ff-only origin main
+GIT_SSH_COMMAND='ssh -o IdentitiesOnly=yes -i /home/valanaadmin/.ssh/valana_github_deploy' git pull --ff-only origin main
 sudo docker compose --env-file .env.production build api
 sudo docker compose --env-file .env.production run --rm --no-deps api node apps/api/dist/scripts/migrate.js
 sudo docker compose --env-file .env.production up -d --no-deps api
