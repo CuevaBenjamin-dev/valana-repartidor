@@ -24,7 +24,8 @@ export class SupervisionController {
         FROM contadores_jornada c JOIN usuarios u ON u.id=c.usuario_id JOIN jornadas j ON j.id=c.jornada_id
         WHERE j.equipo_id IN(SELECT equipo_id FROM miembros_equipo WHERE usuario_id=$1 AND activo)
         AND j.fecha_local=(now() AT TIME ZONE 'America/Lima')::date ORDER BY u.nombre`,[req.usuario.id]),
-      this.bd.consulta(`SELECT h.creada_en,h.motivo,s.codigo,u.nombre AS asesor,a.nombre AS asesor_anterior
+      this.bd.consulta(`SELECT h.creada_en,h.motivo,
+        ('Solicitud '||lpad(s.numero::text,4,'0')) AS codigo,u.nombre AS asesor,a.nombre AS asesor_anterior
         FROM historial_asignaciones h JOIN solicitudes s ON s.id=h.solicitud_id
         JOIN usuarios u ON u.id=h.asesor_nuevo_id LEFT JOIN usuarios a ON a.id=h.asesor_anterior_id
         WHERE s.equipo_id IN(SELECT equipo_id FROM miembros_equipo WHERE usuario_id=$1 AND activo)

@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, Controller, Get, Post, Patch, Param, Body, Query, Req, Res, UseGuards, NotFoundException, ForbiddenException, HttpCode, ServiceUnavailableException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Controller, Delete, Get, Post, Patch, Param, Body, Query, Req, Res, UseGuards, NotFoundException, ForbiddenException, HttpCode, ServiceUnavailableException } from '@nestjs/common';
 import { Response } from 'express';
 import { z } from 'zod';
 import { Bd } from './bd';
@@ -6,17 +6,76 @@ import { SesionesGuard, SolicitudAutenticada, exigirRol } from './auth';
 import { Repartidor } from './repartidor';
 import { ActualizacionEnVivo } from './vivo';
 import { metaConfigurado } from './config';
+import { prepararFoto, guardarFoto, leerFoto, eliminarFoto } from './perfil-foto';
 
 const uuid=z.string().uuid();
 function validar<T>(esquema:z.ZodType<T>,datos:unknown):T { const r=esquema.safeParse(datos); if(!r.success)throw new BadRequestException(r.error.flatten()); return r.data; }
+const etiquetaSolicitud=(numero:string|number)=>`Solicitud ${String(numero).padStart(4,'0')}`;
+const mostrarCodigo=(fila:Record<string,unknown>)=>{
+  if(typeof fila.numero!=='string' && typeof fila.numero!=='number')throw new Error('Solicitud sin número correlativo');
+  return {...fila,codigo:etiquetaSolicitud(fila.numero)};
+};
 
 @Controller('perfil') @UseGuards(SesionesGuard)
 export class PerfilController {
   constructor(private readonly bd:Bd,private readonly repartidor:Repartidor) {}
   @Get()
   async perfil(@Req() req:SolicitudAutenticada) {
-    const r=await this.bd.consulta(`SELECT id,nombre,correo,rol,disponible,presencia_en FROM usuarios WHERE id=$1`,[req.usuario.id]);
+    const r=await this.bd.consulta(`SELECT id,nombre,apellidos,celular_personal,foto_perfil,correo,rol,disponible,presencia_en
+      FROM usuarios WHERE id=$1`,[req.usuario.id]);
     return r.rows[0];
+  }
+  @Patch()
+  async actualizar(@Req() req:SolicitudAutenticada,@Body() datos:unknown){
+    const {nombre,apellidos,celular_personal}=validar(z.object({
+      nombre:z.string().trim().min(2).max(100),apellidos:z.string().trim().max(100),
+      celular_personal:z.union([z.string().regex(/^\+[1-9][0-9]{6,14}$/),z.null()])
+    }).strict(),datos);
+    const r=await this.bd.consulta(`UPDATE usuarios SET nombre=$2,apellidos=$3,celular_personal=$4
+      WHERE id=$1 AND negocio_id=$5 RETURNING id,nombre,apellidos,celular_personal,foto_perfil,correo,rol,disponible,presencia_en`,
+      [req.usuario.id,nombre,apellidos,celular_personal,req.usuario.negocio_id]);
+    return r.rows[0];
+  }
+  @Post('foto') @HttpCode(200)
+  async subirFoto(@Req() req:SolicitudAutenticada,@Body() datos:unknown){
+    const tipo=String(req.headers['content-type']||'').split(';')[0].toLowerCase();
+    const imagen=await prepararFoto(datos,tipo);
+    const nombre=await guardarFoto(imagen);
+    let anterior:string|null;
+    try{
+      anterior=await this.bd.transaccion(async c=>{
+        const previo=await c.query<{foto_perfil:string|null}>(`SELECT foto_perfil FROM usuarios
+          WHERE id=$1 AND negocio_id=$2 FOR UPDATE`,[req.usuario.id,req.usuario.negocio_id]);
+        if(!previo.rowCount)throw new NotFoundException();
+        await c.query('UPDATE usuarios SET foto_perfil=$2 WHERE id=$1',[req.usuario.id,nombre]);
+        return previo.rows[0].foto_perfil;
+      });
+    }catch(e){await eliminarFoto(nombre);throw e}
+    if(anterior)await eliminarFoto(anterior);
+    return {foto_perfil:nombre};
+  }
+  @Get('foto')
+  async obtenerFoto(@Req() req:SolicitudAutenticada,@Res() res:Response){
+    const fila=(await this.bd.consulta<{foto_perfil:string|null}>(
+      'SELECT foto_perfil FROM usuarios WHERE id=$1',[req.usuario.id])).rows[0];
+    if(!fila?.foto_perfil)throw new NotFoundException('Sin fotografía');
+    try{
+      const imagen=await leerFoto(fila.foto_perfil);
+      res.setHeader('Content-Type','image/webp');res.setHeader('X-Content-Type-Options','nosniff');
+      res.setHeader('Cache-Control','private, max-age=300');res.end(imagen);
+    }catch{throw new NotFoundException('Fotografía no encontrada')}
+  }
+  @Delete('foto') @HttpCode(200)
+  async quitarFoto(@Req() req:SolicitudAutenticada){
+    const anterior=await this.bd.transaccion(async c=>{
+      const previo=await c.query<{foto_perfil:string|null}>(`SELECT foto_perfil FROM usuarios
+        WHERE id=$1 AND negocio_id=$2 FOR UPDATE`,[req.usuario.id,req.usuario.negocio_id]);
+      if(!previo.rowCount)throw new NotFoundException();
+      await c.query('UPDATE usuarios SET foto_perfil=NULL WHERE id=$1',[req.usuario.id]);
+      return previo.rows[0].foto_perfil;
+    });
+    if(anterior)await eliminarFoto(anterior);
+    return {foto_perfil:null};
   }
   @Post('heartbeat') @HttpCode(200)
   async heartbeat(@Req() req:SolicitudAutenticada) {
@@ -49,7 +108,7 @@ export class SolicitudesController {
   async listar(@Req() req:SolicitudAutenticada,@Query('estado') estado?:string,@Query('buscar') buscar?:string) {
     const estados=['pendiente_asignacion','pendiente','en_atencion','cerrada'];
     if(estado && estado!=='todas' && !estados.includes(estado))throw new BadRequestException('Estado inválido');
-    const r=await this.bd.consulta(`SELECT s.id,s.codigo,s.estado,s.creada_en,s.asignada_en,
+    const r=await this.bd.consulta(`SELECT s.id,s.codigo,s.numero,s.estado,s.creada_en,s.asignada_en,
       c.telefono,COALESCE(c.telefono,'@'||c.username_whatsapp,'Número privado') AS identificador,
       COALESCE(c.nombre_confirmado,c.nombre_whatsapp,'@'||c.username_whatsapp,'Sin confirmar') AS contacto,
       COALESCE(o.nombre,'Consulta general') AS opcion,u.nombre AS asesor,
@@ -60,10 +119,11 @@ export class SolicitudesController {
       JOIN miembros_equipo me ON me.equipo_id=s.equipo_id AND me.usuario_id=$2 AND me.activo
       WHERE s.negocio_id=$1 AND ($3 IN ('supervisor','administrador') OR s.asesor_id=$2)
       AND ($4::text IS NULL OR $4='todas' OR s.estado=$4)
-      AND ($5::text IS NULL OR s.codigo ILIKE '%'||$5||'%' OR c.telefono ILIKE '%'||$5||'%'
+      AND ($5::text IS NULL OR s.codigo ILIKE '%'||$5||'%'
+        OR ('Solicitud '||lpad(s.numero::text,4,'0')) ILIKE '%'||$5||'%' OR c.telefono ILIKE '%'||$5||'%'
         OR c.nombre_whatsapp ILIKE '%'||$5||'%' OR c.username_whatsapp ILIKE '%'||$5||'%')
       ORDER BY s.creada_en DESC LIMIT 200`,[req.usuario.negocio_id,req.usuario.id,req.usuario.rol,estado||null,buscar?.slice(0,80)||null]);
-    return r.rows;
+    return r.rows.map(mostrarCodigo);
   }
   @Get(':id')
   async detalle(@Req() req:SolicitudAutenticada,@Param('id') id:string) {
@@ -91,7 +151,7 @@ export class SolicitudesController {
     ]);
     const ventanaHasta=(await this.bd.consulta<{ventana_hasta:Date}>(
       `SELECT ultima_interaccion_en+interval '24 hours' AS ventana_hasta FROM contactos WHERE id=$1`,[s.contacto_id])).rows[0]?.ventana_hasta;
-    return {solicitud:principal.rows[0],notas:notas.rows,interacciones:interacciones.rows,
+    return {solicitud:mostrarCodigo(principal.rows[0]),notas:notas.rows,interacciones:interacciones.rows,
       mensajes:mensajes.rows.reverse(),ventana_hasta:ventanaHasta,envio_configurado:metaConfigurado};
   }
   @Post(':id/mensajes') @HttpCode(200)
@@ -181,14 +241,15 @@ export class NotificacionesController {
   constructor(private readonly bd:Bd,private readonly vivo:ActualizacionEnVivo) {}
   @Get()
   async listar(@Req() req:SolicitudAutenticada) {
-    return (await this.bd.consulta(`SELECT n.id,n.solicitud_id,n.tipo,n.texto,n.leida_en,n.creada_en,s.codigo,
+    return (await this.bd.consulta(`SELECT n.id,n.solicitud_id,n.tipo,n.texto,n.leida_en,n.creada_en,s.codigo,s.numero,
       COALESCE(c.nombre_confirmado,c.nombre_whatsapp,'@'||c.username_whatsapp,'Sin confirmar') AS contacto,
       COALESCE(o.nombre,'Consulta general') AS opcion
       FROM notificaciones n LEFT JOIN solicitudes s ON s.id=n.solicitud_id
       LEFT JOIN contactos c ON c.id=s.contacto_id LEFT JOIN opciones_menu o ON o.id=s.opcion_id
       WHERE n.usuario_id=$1 AND n.tipo IN ('nueva_solicitud','continuidad','reasignacion','mensaje_recibido','anuncio')
         AND (n.solicitud_id IS NULL OR s.asesor_id=$1)
-      ORDER BY (n.leida_en IS NULL) DESC,n.creada_en DESC LIMIT 100`,[req.usuario.id])).rows;
+      ORDER BY (n.leida_en IS NULL) DESC,n.creada_en DESC LIMIT 100`,[req.usuario.id])).rows
+        .map(fila=>fila.numero?mostrarCodigo(fila):fila);
   }
   @Post('anuncios') @HttpCode(200)
   async anunciar(@Req() req:SolicitudAutenticada,@Body() datos:unknown) {

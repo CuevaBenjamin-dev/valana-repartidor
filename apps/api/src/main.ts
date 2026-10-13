@@ -23,7 +23,8 @@ class AppModule {}
 async function iniciar() {
   const app=await NestFactory.create<NestExpressApplication>(AppModule,{rawBody:true});
   app.use(cookieParser());
-  app.enableCors({origin:config.WEB_ORIGIN,credentials:true,methods:['GET','POST','PATCH','OPTIONS'],allowedHeaders:['Content-Type','X-CSRF-Token']});
+  app.useBodyParser('raw',{type:['image/jpeg','image/png','image/webp'],limit:'2mb'});
+  app.enableCors({origin:config.WEB_ORIGIN,credentials:true,methods:['GET','POST','PATCH','DELETE','OPTIONS'],allowedHeaders:['Content-Type','X-CSRF-Token']});
   app.enableShutdownHooks();
   await app.listen(config.PORT,'0.0.0.0');
 }
