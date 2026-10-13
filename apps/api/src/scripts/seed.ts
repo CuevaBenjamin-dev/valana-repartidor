@@ -19,7 +19,7 @@ async function main() {
       await c.query(`INSERT INTO opciones_menu(negocio_id,equipo_id,numero,identificador,nombre) VALUES($1,$2,$3,$4,$5)
         ON CONFLICT(equipo_id,numero) DO NOTHING`,[negocio.id,equipo.id,numero,identificador,nombre]);
     }
-    const usuarios = [
+    const usuarios = process.env.NODE_ENV === 'production' ? [] : [
       ['Ana','ana@valana.local','asesor'],['Bruno','bruno@valana.local','asesor'],
       ['Carlos','carlos@valana.local','asesor'],['Lucía','lucia@valana.local','asesor'],
       ['Supervisor','supervisor@valana.local','supervisor'],['Administrador','admin@valana.local','administrador']

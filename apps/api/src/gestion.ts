@@ -1,4 +1,4 @@
-import { BadRequestException, Controller, Get, Post, Patch, Param, Body, Req, UseGuards, NotFoundException, HttpCode } from '@nestjs/common';
+import { BadRequestException, ConflictException, Controller, Get, Post, Patch, Param, Body, Req, UseGuards, NotFoundException, HttpCode } from '@nestjs/common';
 import { z } from 'zod';
 import * as argon2 from 'argon2';
 import { Bd } from './bd';
@@ -76,7 +76,7 @@ export class ConfiguracionController {
         mensaje_confirmacion,mensaje_fuera_horario,mensaje_sin_asesor FROM negocios WHERE id=$1`,[req.usuario.negocio_id]),
       this.bd.consulta('SELECT id,nombre,activo FROM equipos WHERE negocio_id=$1 ORDER BY nombre',[req.usuario.negocio_id]),
       this.bd.consulta('SELECT id,equipo_id,numero,identificador,nombre,activo FROM opciones_menu WHERE negocio_id=$1 ORDER BY numero',[req.usuario.negocio_id]),
-      this.bd.consulta('SELECT id,nombre,correo,rol,activo FROM usuarios WHERE negocio_id=$1 ORDER BY nombre',[req.usuario.negocio_id])
+      this.bd.consulta('SELECT id,nombre,correo,rol,activo,disponible,presencia_en,retirado_en FROM usuarios WHERE negocio_id=$1 ORDER BY nombre',[req.usuario.negocio_id])
     ]);
     return {negocio:negocio.rows[0],equipos:equipos.rows,opciones:opciones.rows,usuarios:usuarios.rows};
   }
@@ -110,27 +110,98 @@ export class ConfiguracionController {
   @Patch('usuarios/:id')
   async usuario(@Req() req:SolicitudAutenticada,@Param('id') id:string,@Body() datos:unknown) {
     exigirRol(req.usuario,['administrador']); parsear(uuid,id);
-    const d=parsear(z.object({nombre:z.string().trim().min(2).max(120),activo:z.boolean(),clave:z.string().min(14).max(256).optional()}),datos);
+    const d=parsear(z.object({nombre:z.string().trim().min(2).max(120),correo:z.email().transform(x=>x.toLowerCase()).optional(),activo:z.boolean()}),datos);
     if(id===req.usuario.id && !d.activo)throw new BadRequestException('No puedes desactivar tu propia cuenta');
-    const hash=d.clave?await argon2.hash(d.clave,{type:argon2.argon2id}):null;
-    const r=await this.bd.consulta(`UPDATE usuarios SET nombre=$3,activo=$4,clave_hash=COALESCE($5,clave_hash)
-      WHERE id=$1 AND negocio_id=$2 RETURNING id`,[id,req.usuario.negocio_id,d.nombre,d.activo,hash]);
-    if(!r.rowCount)throw new NotFoundException();return {ok:true};
+    return this.bd.transaccion(async c=>{
+      const previo=(await c.query<{rol:string;activo:boolean}>(
+        'SELECT rol,activo FROM usuarios WHERE id=$1 AND negocio_id=$2 FOR UPDATE',[id,req.usuario.negocio_id])).rows[0];
+      if(!previo)throw new NotFoundException();
+      if(previo.rol==='administrador' && previo.activo && !d.activo){
+        const restantes=await c.query(`SELECT 1 FROM usuarios WHERE negocio_id=$1 AND rol='administrador' AND activo AND id<>$2 LIMIT 1`,[req.usuario.negocio_id,id]);
+        if(!restantes.rowCount)throw new ConflictException('Debe quedar un administrador activo');
+      }
+      if(previo.rol==='asesor' && previo.activo && !d.activo){
+        const abiertas=await c.query(`SELECT 1 FROM solicitudes WHERE asesor_id=$1 AND estado<>'cerrada' LIMIT 1`,[id]);
+        if(abiertas.rowCount)throw new ConflictException('Retira al asesor para reasignar sus solicitudes abiertas');
+      }
+      await c.query(`UPDATE usuarios SET nombre=$3,correo=COALESCE($4,correo),activo=$5,
+        disponible=CASE WHEN $5 THEN disponible ELSE false END,retirado_en=CASE WHEN $5 THEN NULL ELSE retirado_en END
+        WHERE id=$1 AND negocio_id=$2`,[id,req.usuario.negocio_id,d.nombre,d.correo||null,d.activo]);
+      if(!d.activo)await c.query('UPDATE sesiones SET revocada_en=now() WHERE usuario_id=$1 AND revocada_en IS NULL',[id]);
+      if(d.activo && !previo.activo)await c.query('UPDATE miembros_equipo SET activo=true WHERE usuario_id=$1',[id]);
+      return {ok:true};
+    });
   }
   @Post('usuarios')
   async crearUsuario(@Req() req:SolicitudAutenticada,@Body() datos:unknown) {
     exigirRol(req.usuario,['administrador']);
-    const d=parsear(z.object({nombre:z.string().trim().min(2).max(120),correo:z.email().transform(x=>x.toLowerCase()),rol:z.enum(['asesor','supervisor','administrador']),clave:z.string().min(14).max(256),equipo_id:uuid}),datos);
+    const d=parsear(z.object({nombre:z.string().trim().min(2).max(120),correo:z.email().transform(x=>x.toLowerCase()),rol:z.enum(['asesor','supervisor','administrador']),clave:z.string().min(8).max(256),equipo_id:uuid}),datos);
     const claveHash=await argon2.hash(d.clave,{type:argon2.argon2id});
     return this.bd.transaccion(async c=>{
       const equipo=await c.query('SELECT id FROM equipos WHERE id=$1 AND negocio_id=$2 AND activo FOR UPDATE',[d.equipo_id,req.usuario.negocio_id]);
       if(!equipo.rowCount)throw new NotFoundException('Equipo no encontrado');
-      const usuario=(await c.query<{id:string}>(`INSERT INTO usuarios(negocio_id,nombre,correo,clave_hash,rol) VALUES($1,$2,$3,$4,$5) RETURNING id`,
+      const usuario=(await c.query<{id:string}>(`INSERT INTO usuarios(negocio_id,nombre,correo,clave_hash,rol,cambio_clave_obligatorio) VALUES($1,$2,$3,$4,$5,true) RETURNING id`,
         [req.usuario.negocio_id,d.nombre,d.correo,claveHash,d.rol])).rows[0];
       await c.query('INSERT INTO miembros_equipo(equipo_id,usuario_id) VALUES($1,$2)',[d.equipo_id,usuario.id]);
       await c.query(`INSERT INTO registro_auditoria(negocio_id,usuario_id,entidad,entidad_id,accion)
         VALUES($1,$2,'usuarios',$3,'crear_usuario')`,[req.usuario.negocio_id,req.usuario.id,usuario.id]);
       return {id:usuario.id};
+    });
+  }
+  @Post('asesores/:id/restablecer-clave') @HttpCode(200)
+  async restablecerClave(@Req() req:SolicitudAutenticada,@Param('id') id:string,@Body() datos:unknown) {
+    exigirRol(req.usuario,['administrador']);parsear(uuid,id);
+    const {clave}=parsear(z.object({clave:z.string().min(8).max(256)}),datos);
+    const claveHash=await argon2.hash(clave,{type:argon2.argon2id});
+    return this.bd.transaccion(async c=>{
+      const r=await c.query(`UPDATE usuarios SET clave_hash=$3,cambio_clave_obligatorio=true
+        WHERE id=$1 AND negocio_id=$2 AND rol='asesor' AND activo RETURNING id`,[id,req.usuario.negocio_id,claveHash]);
+      if(!r.rowCount)throw new NotFoundException('Asesor activo no encontrado');
+      await c.query('UPDATE sesiones SET revocada_en=now() WHERE usuario_id=$1 AND revocada_en IS NULL',[id]);
+      return {ok:true};
+    });
+  }
+  @Post('asesores/:id/retirar') @HttpCode(200)
+  async retirarAsesor(@Req() req:SolicitudAutenticada,@Param('id') id:string) {
+    exigirRol(req.usuario,['administrador']);parsear(uuid,id);
+    return this.bd.transaccion(async c=>{
+      const usuario=(await c.query<{id:string}>(`SELECT id FROM usuarios
+        WHERE id=$1 AND negocio_id=$2 AND rol='asesor' AND activo FOR UPDATE`,[id,req.usuario.negocio_id])).rows[0];
+      if(!usuario)throw new NotFoundException('Asesor activo no encontrado');
+      const equipos=(await c.query<{id:string}>(`SELECT e.id FROM equipos e JOIN miembros_equipo m ON m.equipo_id=e.id
+        WHERE m.usuario_id=$1 AND m.activo ORDER BY e.id`,[id])).rows;
+      for(const equipo of equipos)await c.query('SELECT id FROM equipos WHERE id=$1 FOR UPDATE',[equipo.id]);
+      const grupos=(await c.query<{contacto_id:string;equipo_id:string}>(`SELECT DISTINCT contacto_id,equipo_id FROM solicitudes
+        WHERE asesor_id=$1 AND estado<>'cerrada' ORDER BY equipo_id,contacto_id`,[id])).rows;
+      let reasignadas=0;
+      for(const grupo of grupos){
+        await c.query('SELECT id FROM contactos WHERE id=$1 FOR UPDATE',[grupo.contacto_id]);
+        const destino=(await c.query<{id:string}>(`SELECT u.id FROM usuarios u JOIN miembros_equipo m ON m.usuario_id=u.id
+          WHERE m.equipo_id=$1 AND m.activo AND u.id<>$2 AND u.activo AND u.rol='asesor'
+          ORDER BY CASE WHEN EXISTS(SELECT 1 FROM solicitudes s WHERE s.asesor_id=u.id
+            AND s.contacto_id=$3 AND s.equipo_id=$1 AND s.estado<>'cerrada') THEN 0 ELSE 1 END,
+            (SELECT count(*) FROM solicitudes s WHERE s.asesor_id=u.id AND s.estado<>'cerrada'),u.id LIMIT 1`,
+          [grupo.equipo_id,id,grupo.contacto_id])).rows[0];
+        if(!destino)throw new ConflictException('No hay otro asesor activo para recibir las solicitudes');
+        const solicitudes=(await c.query<{id:string}>(`SELECT id FROM solicitudes
+          WHERE contacto_id=$1 AND equipo_id=$2 AND asesor_id=$3 AND estado<>'cerrada' FOR UPDATE`,
+          [grupo.contacto_id,grupo.equipo_id,id])).rows;
+        for(const solicitud of solicitudes){
+          await c.query('UPDATE solicitudes SET asesor_id=$2 WHERE id=$1',[solicitud.id,destino.id]);
+          await c.query(`INSERT INTO historial_asignaciones(solicitud_id,asesor_anterior_id,asesor_nuevo_id,usuario_actor_id,motivo)
+            VALUES($1,$2,$3,$4,'retiro_administrativo')`,[solicitud.id,id,destino.id,req.usuario.id]);
+          await c.query(`INSERT INTO notificaciones(usuario_id,solicitud_id,tipo,texto)
+            VALUES($1,$2,'reasignacion','Se te reasignó una solicitud.')`,[destino.id,solicitud.id]);
+          reasignadas++;
+        }
+      }
+      await c.query(`UPDATE usuarios SET activo=false,disponible=false,retirado_en=now() WHERE id=$1`,[id]);
+      await c.query('UPDATE miembros_equipo SET activo=false WHERE usuario_id=$1',[id]);
+      await c.query('UPDATE sesiones SET revocada_en=now() WHERE usuario_id=$1 AND revocada_en IS NULL',[id]);
+      await c.query(`INSERT INTO registro_auditoria(negocio_id,usuario_id,entidad,entidad_id,accion,detalle)
+        VALUES($1,$2,'usuarios',$3,'retirar_asesor',jsonb_build_object('solicitudes_reasignadas',$4::integer))`,
+        [req.usuario.negocio_id,req.usuario.id,id,reasignadas]);
+      return {reasignadas};
     });
   }
   @Patch('equipos/:id')

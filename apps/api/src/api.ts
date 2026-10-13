@@ -1,10 +1,11 @@
-import { BadRequestException, Controller, Get, Post, Patch, Param, Body, Query, Req, Res, UseGuards, NotFoundException, ForbiddenException, HttpCode } from '@nestjs/common';
+import { BadRequestException, ConflictException, Controller, Get, Post, Patch, Param, Body, Query, Req, Res, UseGuards, NotFoundException, ForbiddenException, HttpCode, ServiceUnavailableException } from '@nestjs/common';
 import { Response } from 'express';
 import { z } from 'zod';
 import { Bd } from './bd';
 import { SesionesGuard, SolicitudAutenticada, exigirRol } from './auth';
 import { Repartidor } from './repartidor';
 import { ActualizacionEnVivo } from './vivo';
+import { metaConfigurado } from './config';
 
 const uuid=z.string().uuid();
 function validar<T>(esquema:z.ZodType<T>,datos:unknown):T { const r=esquema.safeParse(datos); if(!r.success)throw new BadRequestException(r.error.flatten()); return r.data; }
@@ -67,22 +68,64 @@ export class SolicitudesController {
   @Get(':id')
   async detalle(@Req() req:SolicitudAutenticada,@Param('id') id:string) {
     validar(uuid,id); const s=await this.autorizada(id,req);
-    const [principal,notas,interacciones,historial,avisos]=await Promise.all([
+    const [principal,notas,interacciones,mensajes]=await Promise.all([
       this.bd.consulta(`SELECT s.*,c.telefono,COALESCE(c.telefono,'@'||c.username_whatsapp,'Número privado') AS identificador,
         COALESCE(c.nombre_confirmado,c.nombre_whatsapp,'@'||c.username_whatsapp,'Sin confirmar') AS contacto,
         COALESCE(o.nombre,'Consulta general') AS opcion,u.nombre AS asesor FROM solicitudes s JOIN contactos c ON c.id=s.contacto_id
         LEFT JOIN opciones_menu o ON o.id=s.opcion_id LEFT JOIN usuarios u ON u.id=s.asesor_id WHERE s.id=$1`,[id]),
       this.bd.consulta(`SELECT n.id,n.texto,n.creada_en,u.nombre AS autor FROM notas_solicitud n JOIN usuarios u ON u.id=n.autor_id WHERE n.solicitud_id=$1 ORDER BY n.creada_en`,[id]),
       this.bd.consulta(`SELECT id,tipo,texto,recibida_en FROM interacciones_entrantes WHERE solicitud_id=$1 ORDER BY recibida_en DESC,id DESC`,[id]),
-      this.bd.consulta(`SELECT h.id,h.codigo,h.estado,h.creada_en,h.cerrada_en,COALESCE(o.nombre,'Consulta general') AS opcion,
-        u.nombre AS asesor,n.texto AS nota,n.creada_en AS nota_creada_en,autor.nombre AS autor_nota
-        FROM solicitudes h LEFT JOIN opciones_menu o ON o.id=h.opcion_id LEFT JOIN usuarios u ON u.id=h.asesor_id
-        LEFT JOIN notas_solicitud n ON n.solicitud_id=h.id LEFT JOIN usuarios autor ON autor.id=n.autor_id
-        WHERE h.contacto_id=$1 AND h.equipo_id=$2 AND h.negocio_id=$3 ORDER BY h.creada_en DESC,n.creada_en DESC LIMIT 100`,[s.contacto_id,s.equipo_id,s.negocio_id]),
-      this.bd.consulta(`SELECT tipo,texto,creada_en FROM notificaciones WHERE solicitud_id=$1 AND usuario_id=$2
-        AND tipo IN ('nueva_solicitud','continuidad','reasignacion','mensaje_recibido') ORDER BY creada_en DESC LIMIT 20`,[id,req.usuario.id])
+      this.bd.consulta(`SELECT * FROM (
+        SELECT i.id,i.solicitud_id,i.texto,COALESCE(NULLIF(i.texto,''),'Mensaje recibido') AS contenido,
+          i.recibida_en AS fecha,'entrante'::text AS direccion,'recibido'::text AS estado,NULL::text AS error
+        FROM interacciones_entrantes i JOIN solicitudes h ON h.id=i.solicitud_id
+        WHERE i.contacto_id=$1 AND h.contacto_id=$1 AND h.equipo_id=$2 AND h.negocio_id=$3
+          AND ($4::text<>'asesor' OR h.asesor_id=$5)
+        UNION ALL
+        SELECT m.id,m.solicitud_id,m.texto,m.texto AS contenido,m.creado_en AS fecha,
+          'saliente'::text AS direccion,COALESCE(m.meta_estado,m.estado) AS estado,m.error_resumen AS error
+        FROM mensajes_salientes m JOIN solicitudes h ON h.id=m.solicitud_id
+        WHERE m.contacto_id=$1 AND h.contacto_id=$1 AND h.equipo_id=$2 AND h.negocio_id=$3
+          AND ($4::text<>'asesor' OR h.asesor_id=$5)
+      ) conversacion ORDER BY fecha DESC,id DESC LIMIT 300`,[s.contacto_id,s.equipo_id,s.negocio_id,req.usuario.rol,req.usuario.id])
     ]);
-    return {solicitud:principal.rows[0],notas:notas.rows,interacciones:interacciones.rows,historial:historial.rows,notificaciones:avisos.rows};
+    const ventanaHasta=(await this.bd.consulta<{ventana_hasta:Date}>(
+      `SELECT ultima_interaccion_en+interval '24 hours' AS ventana_hasta FROM contactos WHERE id=$1`,[s.contacto_id])).rows[0]?.ventana_hasta;
+    return {solicitud:principal.rows[0],notas:notas.rows,interacciones:interacciones.rows,
+      mensajes:mensajes.rows.reverse(),ventana_hasta:ventanaHasta,envio_configurado:metaConfigurado};
+  }
+  @Post(':id/mensajes') @HttpCode(200)
+  async enviarMensaje(@Req() req:SolicitudAutenticada,@Param('id') id:string,@Body() datos:unknown) {
+    validar(uuid,id);
+    if(!metaConfigurado)throw new ServiceUnavailableException('WhatsApp no está configurado');
+    const {texto,clave_idempotencia}=validar(z.object({texto:z.string().trim().min(1).max(4000),clave_idempotencia:uuid}),datos);
+    const s=await this.autorizada(id,req,true);
+    if(s.estado==='cerrada' || s.estado==='pendiente_asignacion')throw new BadRequestException('La solicitud no está activa');
+    return this.bd.transaccion(async c=>{
+      const contacto=(await c.query<{ultima_interaccion_en:Date}>(
+        'SELECT ultima_interaccion_en FROM contactos WHERE id=$1 AND negocio_id=$2 FOR UPDATE',[s.contacto_id,s.negocio_id])).rows[0];
+      const vigente=(await c.query<{asesor_id:string|null;estado:string}>(
+        'SELECT asesor_id,estado FROM solicitudes WHERE id=$1 FOR UPDATE',[id])).rows[0];
+      if(!vigente || vigente.estado==='cerrada' || (req.usuario.rol==='asesor' && vigente.asesor_id!==req.usuario.id))
+        throw new ForbiddenException('La solicitud ya no está asignada a tu cuenta');
+      const existente=await c.query<{id:string;contacto_id:string;autor_id:string;texto:string;estado:string}>(
+        'SELECT id,contacto_id,autor_id,texto,estado FROM mensajes_salientes WHERE clave_idempotencia=$1',[clave_idempotencia]);
+      if(existente.rowCount){
+        const m=existente.rows[0];
+        if(m.contacto_id!==s.contacto_id || m.autor_id!==req.usuario.id || m.texto!==texto)
+          throw new ConflictException('Identificador de envío reutilizado');
+        return {id:m.id,estado:m.estado};
+      }
+      if(!contacto || Date.now()-new Date(contacto.ultima_interaccion_en).getTime()>=24*60*60_000)
+        throw new BadRequestException('La ventana de atención de WhatsApp terminó');
+      const r=await c.query<{id:string;estado:string}>(`INSERT INTO mensajes_salientes
+        (negocio_id,contacto_id,solicitud_id,texto,autor_id,clave_idempotencia)
+        VALUES($1,$2,$3,$4,$5,$6)
+        ON CONFLICT (clave_idempotencia) WHERE clave_idempotencia IS NOT NULL DO NOTHING RETURNING id,estado`,
+        [s.negocio_id,s.contacto_id,id,texto,req.usuario.id,clave_idempotencia]);
+      if(!r.rowCount)throw new ConflictException('Identificador de envío reutilizado');
+      return r.rows[0];
+    });
   }
   @Post(':id/leer') @HttpCode(200)
   async leerMensajes(@Req() req:SolicitudAutenticada,@Param('id') id:string,@Body() datos:unknown) {

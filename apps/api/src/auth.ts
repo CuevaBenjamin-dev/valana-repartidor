@@ -5,7 +5,7 @@ import * as argon2 from 'argon2';
 import { Bd } from './bd';
 import { config } from './config';
 
-export interface UsuarioSesion { id:string; negocio_id:string; nombre:string; correo:string; rol:'asesor'|'supervisor'|'administrador'; activo:boolean; }
+export interface UsuarioSesion { id:string; negocio_id:string; nombre:string; correo:string; rol:'asesor'|'supervisor'|'administrador'; activo:boolean; cambio_clave_obligatorio:boolean; }
 export interface SolicitudAutenticada extends Request { usuario:UsuarioSesion; sesion_expira_en:Date; }
 const hash = (s:string) => createHash('sha256').update(s).digest('hex');
 const seguro = (a:string,b:string) => { const x=Buffer.from(a),y=Buffer.from(b); return x.length===y.length && timingSafeEqual(x,y); };
@@ -21,11 +21,13 @@ export class SesionesGuard implements CanActivate {
     const req=context.switchToHttp().getRequest<SolicitudAutenticada>();
     const token = req.cookies?.['valana_sesion'];
     if (typeof token !== 'string') throw new UnauthorizedException();
-    const encontrado=await this.bd.consulta<UsuarioSesion & {csrf_hash:string;expira_en:Date}>(`SELECT u.id,u.negocio_id,u.nombre,u.correo,u.rol,u.activo,s.csrf_hash,s.expira_en
+    const encontrado=await this.bd.consulta<UsuarioSesion & {csrf_hash:string;expira_en:Date}>(`SELECT u.id,u.negocio_id,u.nombre,u.correo,u.rol,u.activo,u.cambio_clave_obligatorio,s.csrf_hash,s.expira_en
       FROM sesiones s JOIN usuarios u ON u.id=s.usuario_id
       WHERE s.token_hash=$1 AND s.revocada_en IS NULL AND s.expira_en>now()`,[hash(token)]);
     if (!encontrado.rowCount || !encontrado.rows[0].activo) throw new UnauthorizedException();
     const {csrf_hash,expira_en,...usuario}=encontrado.rows[0]; req.usuario=usuario; req.sesion_expira_en=expira_en;
+    if(usuario.cambio_clave_obligatorio && !['/sesion/actual','/sesion/cambiar-clave','/sesion/cerrar'].includes(req.path))
+      throw new ForbiddenException('Debes cambiar tu contraseña temporal');
     if (!['GET','HEAD','OPTIONS'].includes(req.method)) {
       const cabecera=req.header('x-csrf-token');
       const cookie=req.cookies?.['valana_csrf'];
@@ -60,7 +62,7 @@ export class SesionController {
     const llave=`${req.ip}:${correo}`;
     const ahora=Date.now(), previo=intentos.get(llave);
     if (previo && previo.hasta>ahora && previo.n>=5) throw new HttpException('Demasiados intentos',429);
-    const r=await this.bd.consulta<UsuarioSesion & {clave_hash:string}>('SELECT id,negocio_id,nombre,correo,rol,activo,clave_hash FROM usuarios WHERE correo=$1',[correo]);
+    const r=await this.bd.consulta<UsuarioSesion & {clave_hash:string}>('SELECT id,negocio_id,nombre,correo,rol,activo,cambio_clave_obligatorio,clave_hash FROM usuarios WHERE correo=$1',[correo]);
     const valido=r.rowCount && r.rows[0].activo && await argon2.verify(r.rows[0].clave_hash,clave);
     if (!valido) { intentos.set(llave,{n:(previo?.hasta && previo.hasta>ahora ? previo.n : 0)+1,hasta:ahora+15*60_000}); throw new UnauthorizedException('Credenciales inválidas'); }
     intentos.delete(llave);
@@ -73,6 +75,22 @@ export class SesionController {
   }
   @Get('actual') @UseGuards(SesionesGuard)
   actual(@Req() req:SolicitudAutenticada) { return {usuario:req.usuario}; }
+  @Post('cambiar-clave') @UseGuards(SesionesGuard) @HttpCode(200)
+  async cambiarClave(@Req() req:SolicitudAutenticada,@Body() datos:unknown) {
+    const cuerpo=datos && typeof datos==='object'?datos as Record<string,unknown>:{};
+    const anterior=typeof cuerpo.anterior==='string'?cuerpo.anterior:'';
+    const nueva=typeof cuerpo.nueva==='string'?cuerpo.nueva:'';
+    if(nueva.length<14 || nueva.length>256 || !/[a-z]/.test(nueva) || !/[A-Z]/.test(nueva) || !/\d/.test(nueva) || !/[^\p{L}\p{N}]/u.test(nueva) || nueva===anterior)
+      throw new ForbiddenException('La nueva contraseña debe tener 14 caracteres, mayúscula, minúscula, número y símbolo');
+    const r=await this.bd.consulta<{clave_hash:string}>('SELECT clave_hash FROM usuarios WHERE id=$1 AND activo',[req.usuario.id]);
+    if(!r.rowCount || !await argon2.verify(r.rows[0].clave_hash,anterior))throw new UnauthorizedException('Contraseña actual inválida');
+    const nuevaHash=await argon2.hash(nueva,{type:argon2.argon2id});
+    await this.bd.transaccion(async c=>{
+      await c.query('UPDATE usuarios SET clave_hash=$2,cambio_clave_obligatorio=false WHERE id=$1',[req.usuario.id,nuevaHash]);
+      await c.query('UPDATE sesiones SET revocada_en=now() WHERE usuario_id=$1 AND token_hash<>$2 AND revocada_en IS NULL',[req.usuario.id,hash(req.cookies['valana_sesion'])]);
+    });
+    return {ok:true};
+  }
   @Post('cerrar') @UseGuards(SesionesGuard) @HttpCode(200)
   async cerrar(@Req() req:SolicitudAutenticada,@Res({passthrough:true}) res:Response) {
     await this.bd.consulta('UPDATE sesiones SET revocada_en=now() WHERE token_hash=$1',[hash(req.cookies['valana_sesion'])]);

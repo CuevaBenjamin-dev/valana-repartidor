@@ -8,7 +8,7 @@ import { ActualizacionEnVivo } from './vivo';
 import { ContactoMeta, destinatarioMeta, identificarRemitente } from './meta-identidad';
 
 interface MetaMensaje { id?:string; from?:string|null; from_user_id?:string; timestamp?:string; type?:string; text?:{body?:string}; interactive?:{type?:string;list_reply?:{id?:string;title?:string};button_reply?:{id?:string;title?:string}}; button?:{payload?:string;text?:string}; }
-interface MetaCambio { value?: { metadata?:{phone_number_id?:string}; contacts?:ContactoMeta[]; messages?:MetaMensaje[]; statuses?:unknown[] } }
+interface MetaCambio { value?: { metadata?:{phone_number_id?:string}; contacts?:ContactoMeta[]; messages?:MetaMensaje[]; statuses?:{id?:string;status?:string}[] } }
 interface MetaCarga { object?:string; entry?:{changes?:MetaCambio[]}[] }
 
 @Controller('webhooks/meta')
@@ -37,9 +37,16 @@ export class MetaController {
         if(v?.messages?.length)this.logger.warn(`Mensajes ignorados: destino no coincide (${v.messages.length})`);
         continue;
       }
-      if(!v?.messages?.length && v?.statuses?.length)this.logger.log(`Webhook de estados sin mensajes entrantes (${v.statuses.length})`);
       const negocio=await this.bd.consulta<{id:string}>('SELECT id FROM negocios WHERE meta_phone_number_id=$1',[config.META_PHONE_NUMBER_ID]);
       if (!negocio.rowCount) {if(v?.messages?.length)this.logger.warn('Mensajes ignorados: negocio no configurado');continue;}
+      for(const estado of v?.statuses || []) {
+        if(!estado.id || !['sent','delivered','read','failed'].includes(estado.status || ''))continue;
+        await this.bd.consulta(`UPDATE mensajes_salientes SET
+          meta_estado=CASE WHEN meta_estado='read' THEN 'read'
+            WHEN meta_estado='delivered' AND $2='sent' THEN 'delivered' ELSE $2 END,
+          error_resumen=CASE WHEN $2='failed' THEN 'Meta informó un error de entrega' ELSE error_resumen END
+          WHERE meta_mensaje_id=$1 AND negocio_id=$3`,[estado.id,estado.status,negocio.rows[0].id]);
+      }
       for (const m of v?.messages || []) {
         if (!m.id) {this.logger.warn('Mensaje ignorado: falta ID');continue;}
         const {telefono,metaUserId,nombre,username}=identificarRemitente(m,v?.contacts);
@@ -97,7 +104,7 @@ export class TrabajosMeta implements OnModuleInit, OnModuleDestroy {
       let id:string|undefined;
       try {
         const resultado=await this.bd.transaccion(async c=>{
-          const r=await c.query<{id:string;negocio_id:string;carga:{id:string;telefono?:string;metaUserId?:string;username?:string;nombre?:string;tipo:string;texto:string;identificador?:string}}>(`SELECT id,negocio_id,carga
+          const r=await c.query<{id:string;negocio_id:string;carga:{id:string;telefono?:string;metaUserId?:string;username?:string;nombre?:string;tipo:string;texto:string;identificador?:string;metaTimestamp?:string}}>(`SELECT id,negocio_id,carga
             FROM eventos_webhook WHERE estado='pendiente' AND siguiente_intento_en<=now()
             ORDER BY recibido_en LIMIT 1 FOR UPDATE SKIP LOCKED`);
           if(!r.rowCount)return false;

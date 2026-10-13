@@ -6,7 +6,7 @@ import { interpretarOpcion, Opcion, textoMenu } from './menu';
 
 interface Negocio { id:string; zona_horaria:string; dias_atencion:number[]|null; hora_inicio:string|null; hora_fin:string|null; mensaje_menu:string; mensaje_confirmacion:string; mensaje_fuera_horario:string; mensaje_sin_asesor:string; }
 interface SolicitudAbierta { id:string; asesor_id:string|null; opcion_id:string|null; creada_en:Date; en_ventana:boolean; }
-interface Mensaje { id:string; telefono?:string|null; metaUserId?:string|null; username?:string|null; nombre?:string; tipo:string; texto:string; identificador?:string; }
+interface Mensaje { id:string; telefono?:string|null; metaUserId?:string|null; username?:string|null; nombre?:string; tipo:string; texto:string; identificador?:string; metaTimestamp?:string; }
 
 @Injectable()
 export class Repartidor {
@@ -98,6 +98,9 @@ export class Repartidor {
     if (!telefono && !metaUserId) throw new Error('Mensaje sin identificador de contacto');
     if (metaUserId && (metaUserId.length>160 || /[\s\x00-\x1f]/.test(metaUserId))) throw new Error('Identificador Meta inválido');
     const username=m.username?.trim().replace(/^@/,'').slice(0,80) || null;
+    const segundos=m.metaTimestamp && /^\d{10}$/.test(m.metaTimestamp)?Number(m.metaTimestamp):NaN;
+    const instante=Number.isFinite(segundos) && segundos*1000<=Date.now()
+      ? new Date(segundos*1000) : new Date();
     const encontrados=await c.query<{id:string;telefono:string|null;meta_user_id:string|null}>(`SELECT id,telefono,meta_user_id FROM contactos
       WHERE negocio_id=$1 AND (($2::text IS NOT NULL AND meta_user_id=$2) OR ($3::text IS NOT NULL AND telefono=$3))
       FOR UPDATE`,[negocioId,metaUserId,telefono]);
@@ -105,10 +108,10 @@ export class Repartidor {
     const contacto=encontrados.rows[0]
       ? (await c.query<{id:string}>(`UPDATE contactos SET telefono=COALESCE(telefono,$2),
           meta_user_id=COALESCE(meta_user_id,$3),nombre_whatsapp=COALESCE($4,nombre_whatsapp),
-          username_whatsapp=COALESCE($5,username_whatsapp),ultima_interaccion_en=now()
-          WHERE id=$1 RETURNING id`,[encontrados.rows[0].id,telefono,metaUserId,m.nombre || null,username])).rows[0]
-      : (await c.query<{id:string}>(`INSERT INTO contactos(negocio_id,telefono,meta_user_id,nombre_whatsapp,username_whatsapp)
-          VALUES($1,$2,$3,$4,$5) RETURNING id`,[negocioId,telefono,metaUserId,m.nombre || null,username])).rows[0];
+          username_whatsapp=COALESCE($5,username_whatsapp),ultima_interaccion_en=GREATEST(ultima_interaccion_en,$6)
+          WHERE id=$1 RETURNING id`,[encontrados.rows[0].id,telefono,metaUserId,m.nombre || null,username,instante])).rows[0]
+      : (await c.query<{id:string}>(`INSERT INTO contactos(negocio_id,telefono,meta_user_id,nombre_whatsapp,username_whatsapp,ultima_interaccion_en)
+          VALUES($1,$2,$3,$4,$5,$6) RETURNING id`,[negocioId,telefono,metaUserId,m.nombre || null,username,instante])).rows[0];
     const insertado=await c.query<{id:string}>(`INSERT INTO interacciones_entrantes(meta_mensaje_id,negocio_id,contacto_id,tipo,texto)
       VALUES($1,$2,$3,$4,$5) ON CONFLICT(meta_mensaje_id) DO NOTHING RETURNING id`,[m.id,negocioId,contacto.id,m.tipo,m.texto.slice(0,4000)]);
     if (!insertado.rowCount) return;
