@@ -11,13 +11,14 @@ import { MetaController, TrabajosMeta } from './meta';
 import { PerfilController, SolicitudesController, NotificacionesController } from './api';
 import { SupervisionController, ConfiguracionController } from './gestion';
 import { ActualizacionEnVivo } from './vivo';
+import { IntegracionBostonController, DesdeWebController } from './desde-web';
 
 @Controller('salud')
 class SaludController {
   constructor(private readonly bd:Bd) {}
   @Get() async salud() { await this.bd.consulta('SELECT 1'); return {estado:'ok'}; }
 }
-@Module({providers:[Bd,SesionesGuard,Repartidor,TrabajosMeta,ActualizacionEnVivo],controllers:[SaludController,SesionController,MetaController,PerfilController,SolicitudesController,NotificacionesController,SupervisionController,ConfiguracionController]})
+@Module({providers:[Bd,SesionesGuard,Repartidor,TrabajosMeta,ActualizacionEnVivo],controllers:[SaludController,SesionController,MetaController,PerfilController,SolicitudesController,NotificacionesController,SupervisionController,ConfiguracionController,IntegracionBostonController,DesdeWebController]})
 class AppModule {}
 
 async function iniciar() {

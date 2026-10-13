@@ -124,6 +124,8 @@ export class ConfiguracionController {
       if(previo.rol==='asesor' && previo.activo && !d.activo){
         const abiertas=await c.query(`SELECT 1 FROM solicitudes WHERE asesor_id=$1 AND estado<>'cerrada' LIMIT 1`,[id]);
         if(abiertas.rowCount)throw new ConflictException('Retira al asesor para reasignar sus solicitudes abiertas');
+        const webAbiertas=await c.query(`SELECT 1 FROM solicitudes_web WHERE asesor_id=$1 AND estado<>'cerrada' LIMIT 1`,[id]);
+        if(webAbiertas.rowCount)throw new ConflictException('Retira al asesor para reasignar sus solicitudes web abiertas');
       }
       await c.query(`UPDATE usuarios SET nombre=$3,correo=COALESCE($4,correo),activo=$5,
         disponible=CASE WHEN $5 THEN disponible ELSE false END,retirado_en=CASE WHEN $5 THEN NULL ELSE retirado_en END
@@ -195,6 +197,23 @@ export class ConfiguracionController {
             VALUES($1,$2,'reasignacion','Se te reasignó una solicitud.')`,[destino.id,solicitud.id]);
           reasignadas++;
         }
+      }
+      const webAbiertas=(await c.query<{id:string;equipo_id:string}>(`SELECT id,equipo_id FROM solicitudes_web
+        WHERE asesor_id=$1 AND estado<>'cerrada' ORDER BY equipo_id,id FOR UPDATE`,[id])).rows;
+      for(const solicitud of webAbiertas){
+        const destino=(await c.query<{id:string}>(`SELECT u.id FROM usuarios u JOIN miembros_equipo m ON m.usuario_id=u.id
+          WHERE m.equipo_id=$1 AND m.activo AND u.id<>$2 AND u.activo AND u.rol='asesor'
+          ORDER BY (SELECT count(*) FROM solicitudes s WHERE s.asesor_id=u.id AND s.estado<>'cerrada')+
+            (SELECT count(*) FROM solicitudes_web s WHERE s.asesor_id=u.id AND s.estado<>'cerrada'),u.id LIMIT 1`,
+          [solicitud.equipo_id,id])).rows[0];
+        if(!destino)throw new ConflictException('No hay otro asesor activo para recibir las solicitudes web');
+        await c.query('UPDATE solicitudes_web SET asesor_id=$2 WHERE id=$1',[solicitud.id,destino.id]);
+        await c.query(`INSERT INTO notificaciones_web(usuario_id,solicitud_id,tipo)
+          VALUES($1,$2,'reasignacion') ON CONFLICT DO NOTHING`,[destino.id,solicitud.id]);
+        await c.query(`INSERT INTO registro_auditoria(negocio_id,usuario_id,entidad,entidad_id,accion,detalle)
+          VALUES($1,$2,'solicitudes_web',$3,'reasignacion',jsonb_build_object('asesor_anterior_id',$4::uuid,'asesor_nuevo_id',$5::uuid))`,
+          [req.usuario.negocio_id,req.usuario.id,solicitud.id,id,destino.id]);
+        reasignadas++;
       }
       await c.query(`UPDATE usuarios SET activo=false,disponible=false,retirado_en=now() WHERE id=$1`,[id]);
       await c.query('UPDATE miembros_equipo SET activo=false WHERE usuario_id=$1',[id]);

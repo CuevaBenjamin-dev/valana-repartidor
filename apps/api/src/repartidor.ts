@@ -7,6 +7,9 @@ import { interpretarOpcion, Opcion, textoMenu } from './menu';
 interface Negocio { id:string; zona_horaria:string; dias_atencion:number[]|null; hora_inicio:string|null; hora_fin:string|null; mensaje_menu:string; mensaje_confirmacion:string; mensaje_fuera_horario:string; mensaje_sin_asesor:string; }
 interface SolicitudAbierta { id:string; asesor_id:string|null; opcion_id:string|null; creada_en:Date; en_ventana:boolean; }
 interface Mensaje { id:string; telefono?:string|null; metaUserId?:string|null; username?:string|null; nombre?:string; tipo:string; texto:string; identificador?:string; metaTimestamp?:string; }
+export interface FormularioWeb { origen_tipo:'postulacion'|'contacto'; origen_id:number; creada_en:Date;
+  nombre:string;correo:string;telefono:string|null;idioma:'es'|'en';medio_contacto:string|null;
+  estudiante:string|null;edad_estudiante:number|null;grado:string|null;asunto:string|null;mensaje:string|null; }
 
 @Injectable()
 export class Repartidor {
@@ -60,6 +63,17 @@ export class Repartidor {
       [jornadaId,asesorId,motivo==='continuidad'?1:0,motivo==='reparto'?1:0]);
     await c.query(`INSERT INTO notificaciones(usuario_id,solicitud_id,tipo,texto)
       VALUES($1,$2,$3,$4)`,[asesorId,solicitudId,motivo==='continuidad'?'continuidad':'nueva_solicitud','Tienes una nueva solicitud asignada.']);
+  }
+  private async asignarWeb(c:PoolClient,solicitudId:string,asesorId:string,jornadaId:string) {
+    await c.query(`UPDATE solicitudes_web SET asesor_id=$2,estado='pendiente',asignada_en=now() WHERE id=$1`,[solicitudId,asesorId]);
+    await c.query(`UPDATE contadores_jornada SET solicitudes_reales=solicitudes_reales+1,
+      contador_ajustado=contador_ajustado+1,asignaciones_reparto=asignaciones_reparto+1
+      WHERE jornada_id=$1 AND usuario_id=$2`,[jornadaId,asesorId]);
+    await c.query(`INSERT INTO notificaciones_web(usuario_id,solicitud_id) VALUES($1,$2)
+      ON CONFLICT(usuario_id,solicitud_id,tipo) DO NOTHING`,[asesorId,solicitudId]);
+    await c.query(`INSERT INTO registro_auditoria(negocio_id,entidad,entidad_id,accion,detalle)
+      SELECT negocio_id,'solicitudes_web',id,'asignada',jsonb_build_object('asesor_id',$2::uuid)
+      FROM solicitudes_web WHERE id=$1`,[solicitudId,asesorId]);
   }
   private async sortear(c:PoolClient,equipoId:string,jornadaId:string,horario:boolean):Promise<string|null> {
     const todos=await this.elegibles(c,equipoId,jornadaId,horario);
@@ -161,14 +175,26 @@ export class Repartidor {
       const negocio=await this.negocio(c,equipo.negocio_id);
       const jornadaId=await this.jornada(c,equipo.id,negocio.zona_horaria);
       let asignadas=0;
-      const pendientes=(await c.query<{id:string;contacto_id:string}>(`SELECT id,contacto_id FROM solicitudes WHERE equipo_id=$1 AND estado='pendiente_asignacion'
-        ORDER BY creada_en,id FOR UPDATE`,[equipo.id])).rows;
+      const whatsapp=(await c.query<{id:string;contacto_id:string;creada_en:Date}>(`SELECT id,contacto_id,creada_en
+        FROM solicitudes WHERE equipo_id=$1 AND estado='pendiente_asignacion'
+        ORDER BY creada_en,id FOR UPDATE`,[equipo.id])).rows.map(x=>({...x,origen:'whatsapp' as const}));
+      const web=(await c.query<{id:string;creada_en:Date}>(`SELECT id,creada_en FROM solicitudes_web
+        WHERE equipo_id=$1 AND estado='pendiente_asignacion' ORDER BY creada_en,id FOR UPDATE`,[equipo.id]))
+        .rows.map(x=>({...x,origen:'web' as const}));
+      const pendientes=[...whatsapp,...web].sort((a,b)=>
+        new Date(a.creada_en).getTime()-new Date(b.creada_en).getTime() || a.id.localeCompare(b.id));
       for (const pendiente of pendientes) {
-        const continuidad=(await c.query<{asesor_id:string}>(`SELECT asesor_id FROM solicitudes WHERE contacto_id=$1 AND equipo_id=$2
-          AND estado<>'cerrada' AND asesor_id IS NOT NULL ORDER BY creada_en LIMIT 1`,[pendiente.contacto_id,equipo.id])).rows[0]?.asesor_id;
-        const asesor=continuidad || await this.sortear(c,equipo.id,jornadaId,this.enHorario(negocio));
-        if (!asesor) break;
-        await this.asignar(c,pendiente.id,asesor,jornadaId,continuidad?'continuidad':'reparto');
+        if(pendiente.origen==='web'){
+          const asesor=await this.sortear(c,equipo.id,jornadaId,this.enHorario(negocio));
+          if(!asesor)break;
+          await this.asignarWeb(c,pendiente.id,asesor,jornadaId);
+        }else{
+          const continuidad=(await c.query<{asesor_id:string}>(`SELECT asesor_id FROM solicitudes WHERE contacto_id=$1 AND equipo_id=$2
+            AND estado<>'cerrada' AND asesor_id IS NOT NULL ORDER BY creada_en LIMIT 1`,[pendiente.contacto_id,equipo.id])).rows[0]?.asesor_id;
+          const asesor=continuidad || await this.sortear(c,equipo.id,jornadaId,this.enHorario(negocio));
+          if (!asesor) break;
+          await this.asignar(c,pendiente.id,asesor,jornadaId,continuidad?'continuidad':'reparto');
+        }
         asignadas++;
       }
       return asignadas;
@@ -177,6 +203,40 @@ export class Repartidor {
     return this.bd.transaccion(async c=>{
       const equipo=(await c.query<{id:string;negocio_id:string}>(`SELECT id,negocio_id FROM equipos WHERE id=$1 FOR UPDATE`,[equipoId])).rows[0];
       return equipo?this.pendientesEnBloqueo(c,equipo):0;
+    });
+  }
+  async registrarWeb(negocioId:string,formulario:FormularioWeb):Promise<{id:string;duplicado:boolean}> {
+    return this.bd.transaccion(async c=>{
+      const equipo=(await c.query<{id:string;negocio_id:string}>(`SELECT id,negocio_id FROM equipos
+        WHERE negocio_id=$1 AND activo=true ORDER BY creado_en LIMIT 1 FOR UPDATE`,[negocioId])).rows[0];
+      if(!equipo)throw new Error('Equipo no configurado');
+      const existente=(await c.query<{id:string}>(`SELECT id FROM solicitudes_web
+        WHERE origen_tipo=$1 AND origen_id=$2`,[formulario.origen_tipo,formulario.origen_id])).rows[0];
+      if(existente)return {id:existente.id,duplicado:true};
+      await this.pendientesEnBloqueo(c,equipo);
+      const creada=(await c.query<{id:string}>(`INSERT INTO solicitudes_web
+        (negocio_id,equipo_id,origen_tipo,origen_id,nombre,correo,telefono,idioma,medio_contacto,
+         estudiante,edad_estudiante,grado,asunto,mensaje,creada_en)
+        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+        ON CONFLICT(origen_tipo,origen_id) DO NOTHING RETURNING id`,[
+          equipo.negocio_id,equipo.id,formulario.origen_tipo,formulario.origen_id,formulario.nombre,
+          formulario.correo,formulario.telefono,formulario.idioma,formulario.medio_contacto,
+          formulario.estudiante,formulario.edad_estudiante,formulario.grado,formulario.asunto,
+          formulario.mensaje,formulario.creada_en
+        ])).rows[0];
+      if(!creada){
+        const repetida=(await c.query<{id:string}>(`SELECT id FROM solicitudes_web
+          WHERE origen_tipo=$1 AND origen_id=$2`,[formulario.origen_tipo,formulario.origen_id])).rows[0];
+        return {id:repetida.id,duplicado:true};
+      }
+      const negocio=await this.negocio(c,equipo.negocio_id);
+      const jornadaId=await this.jornada(c,equipo.id,negocio.zona_horaria);
+      const ganador=await this.sortear(c,equipo.id,jornadaId,this.enHorario(negocio));
+      if(ganador)await this.asignarWeb(c,creada.id,ganador,jornadaId);
+      await c.query(`INSERT INTO registro_auditoria(negocio_id,entidad,entidad_id,accion,detalle)
+        VALUES($1,'solicitudes_web',$2,'creada',jsonb_build_object('origen',$3::text))`,
+        [equipo.negocio_id,creada.id,formulario.origen_tipo]);
+      return {id:creada.id,duplicado:false};
     });
   }
   async actualizarPresencia(usuarioId:string,disponible?:boolean):Promise<void> {

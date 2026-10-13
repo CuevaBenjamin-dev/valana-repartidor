@@ -14,6 +14,7 @@ const esquema = z.object({
   META_PHONE_NUMBER_ID: z.string().optional(),
   META_GRAPH_API_VERSION: z.string().regex(/^v\d+\.\d+$/).default('v25.0'),
   META_NUMERO_OFICIAL: z.string().optional(),
+  BOSTON_WEB_TOKEN: z.string().optional(),
 });
 export const config = esquema.parse(process.env);
 export const metaConfigurado = Boolean(config.META_APP_SECRET && config.META_VERIFY_TOKEN && config.META_ACCESS_TOKEN && config.META_PHONE_NUMBER_ID);

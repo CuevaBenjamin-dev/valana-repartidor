@@ -240,14 +240,24 @@ export class NotificacionesController {
   constructor(private readonly bd:Bd,private readonly vivo:ActualizacionEnVivo) {}
   @Get()
   async listar(@Req() req:SolicitudAutenticada) {
-    return (await this.bd.consulta(`SELECT n.id,n.solicitud_id,n.tipo,n.texto,n.leida_en,n.creada_en,s.codigo,s.numero,
-      COALESCE(c.nombre_confirmado,c.nombre_whatsapp,'@'||c.username_whatsapp,'Sin confirmar') AS contacto,
-      COALESCE(o.nombre,'Consulta general') AS opcion
+    return (await this.bd.consulta(`SELECT * FROM (
+      SELECT n.id,n.solicitud_id,NULL::uuid AS web_solicitud_id,n.tipo,n.texto,n.leida_en,n.creada_en,
+        s.codigo,s.numero,
+        COALESCE(c.nombre_confirmado,c.nombre_whatsapp,'@'||c.username_whatsapp,'Sin confirmar') AS contacto,
+        COALESCE(o.nombre,'Consulta general') AS opcion
       FROM notificaciones n LEFT JOIN solicitudes s ON s.id=n.solicitud_id
       LEFT JOIN contactos c ON c.id=s.contacto_id LEFT JOIN opciones_menu o ON o.id=s.opcion_id
       WHERE n.usuario_id=$1 AND n.tipo IN ('nueva_solicitud','continuidad','reasignacion','mensaje_recibido','anuncio')
         AND (n.solicitud_id IS NULL OR s.asesor_id=$1)
-      ORDER BY (n.leida_en IS NULL) DESC,n.creada_en DESC LIMIT 100`,[req.usuario.id])).rows
+      UNION ALL
+      SELECT n.id,NULL::uuid AS solicitud_id,n.solicitud_id AS web_solicitud_id,'nueva_web'::text AS tipo,
+        'Nueva solicitud del sitio web'::text AS texto,n.leida_en,n.creada_en,
+        ('WEB-'||CASE WHEN s.origen_tipo='postulacion' THEN 'A-' ELSE 'C-' END||lpad(s.origen_id::text,4,'0')) AS codigo,
+        NULL::bigint AS numero,s.nombre AS contacto,
+        CASE WHEN s.origen_tipo='postulacion' THEN 'Admisión web' ELSE 'Contacto web' END AS opcion
+      FROM notificaciones_web n JOIN solicitudes_web s ON s.id=n.solicitud_id
+      WHERE n.usuario_id=$1 AND s.asesor_id=$1
+      ) avisos ORDER BY (leida_en IS NULL) DESC,creada_en DESC LIMIT 100`,[req.usuario.id])).rows
         .map(fila=>fila.numero?mostrarCodigo(fila):fila);
   }
   @Post('anuncios') @HttpCode(200)
