@@ -7,7 +7,7 @@ const equipo='22222222-2222-4222-8222-222222222222';
 const contacto='33333333-3333-4333-8333-333333333333';
 const solicitudId='44444444-4444-4444-8444-444444444444';
 const asesor='55555555-5555-4555-8555-555555555555';
-const confirmacion='Gracias por contactarnos. Un asesor académico te escribirá desde otro número de WhatsApp.';
+const confirmacion='✅ ¡Gracias! Hemos recibido tu solicitud.\n\nUn asesor académico te responderá por este mismo WhatsApp. 😊';
 let Repartidor:typeof import('./repartidor').Repartidor;
 
 beforeAll(async()=>{
@@ -68,15 +68,15 @@ function preparar(conSolicitud=false){
 }
 
 describe('confirmación de una solicitud asignada',()=>{
-  it('envía menú y después la confirmación configurada al primer texto libre',async()=>{
+  it('envía solo el menú al primer texto libre y asigna la solicitud',async()=>{
     const {mensajes,estado,recibir,c}=preparar();
     await recibir('meta-1','Buen día quisiera más información');
     expect(estado.solicitud?.asesor_id).toBe(asesor);
     expect(estado.solicitud?.opcion_id).toBeNull();
-    expect(mensajes).toHaveLength(2);
+    expect(estado.solicitud?.confirmacion_en).toBeNull();
+    expect(mensajes).toHaveLength(1);
     expect(mensajes[0]).toContain('3. Matrículas');
-    expect(mensajes[1]).toBe(confirmacion);
-    expect(c.query.mock.calls.filter(([sql])=>sql.includes('UPDATE solicitudes SET confirmacion_en='))).toHaveLength(1);
+    expect(c.query.mock.calls.filter(([sql])=>sql.includes('UPDATE solicitudes SET confirmacion_en='))).toHaveLength(0);
   });
   it('conserva «3 y 4» como mensaje adicional sin repetir confirmación ni reparto',async()=>{
     const {mensajes,estado,recibir,c}=preparar();
@@ -84,6 +84,9 @@ describe('confirmación de una solicitud asignada',()=>{
     await recibir('meta-2','3 y 4');
     await recibir('meta-2','3 y 4'); // Reintento del mismo webhook.
     expect(estado.solicitud?.opcion_id).toBeNull();
+    expect(mensajes).toHaveLength(2);
+    expect(mensajes[0]).toContain('3. Matrículas');
+    expect(mensajes[1]).toBe(confirmacion);
     expect(mensajes.filter(x=>x===confirmacion)).toHaveLength(1);
     expect(c.query.mock.calls.filter(([sql])=>sql.includes('INSERT INTO solicitudes(codigo'))).toHaveLength(1);
   });
@@ -101,5 +104,12 @@ describe('confirmación de una solicitud asignada',()=>{
     expect(estado.solicitud?.opcion_id).toBe('opcion-3');
     expect(mensajes.filter(x=>x===confirmacion)).toHaveLength(1);
     expect(c.query.mock.calls.filter(([sql])=>sql.includes('INSERT INTO solicitudes(codigo'))).toHaveLength(1);
+  });
+  it('confirma una opción válida recibida desde el primer mensaje sin enviar un menú redundante',async()=>{
+    const {mensajes,estado,recibir}=preparar();
+    await recibir('meta-7','3');
+    expect(estado.solicitud?.asesor_id).toBe(asesor);
+    expect(estado.solicitud?.opcion_id).toBe('opcion-3');
+    expect(mensajes).toEqual([confirmacion]);
   });
 });

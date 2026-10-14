@@ -173,8 +173,8 @@ export class Repartidor {
     if(!horario)await this.salida(c,negocioId,contacto.id,negocio.mensaje_fuera_horario,solicitudId);
     else if(!asignada)await this.salida(c,negocioId,contacto.id,negocio.mensaje_sin_asesor,solicitudId);
     else {
-      if(!opcion)await this.salida(c,negocioId,contacto.id,textoMenu(negocio.mensaje_menu,opciones),solicitudId);
-      await this.confirmar(c,negocio,contacto.id,solicitudId);
+      if(opcion)await this.confirmar(c,negocio,contacto.id,solicitudId);
+      else await this.salida(c,negocioId,contacto.id,textoMenu(negocio.mensaje_menu,opciones),solicitudId);
     }
   }
   private async pendientesEnBloqueo(c:PoolClient,equipo:{id:string;negocio_id:string}):Promise<number> {
