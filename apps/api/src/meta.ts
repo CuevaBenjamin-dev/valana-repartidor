@@ -134,7 +134,7 @@ export class TrabajosMeta implements OnModuleInit, OnModuleDestroy {
           const r=await c.query<{id:string;texto:string;telefono:string|null;meta_user_id:string|null;ultima_interaccion_en:Date}>(`SELECT m.id,m.texto,c.telefono,c.meta_user_id,c.ultima_interaccion_en
             FROM mensajes_salientes m JOIN contactos c ON c.id=m.contacto_id JOIN negocios n ON n.id=m.negocio_id
             WHERE m.estado='pendiente' AND m.siguiente_intento_en<=now() AND n.meta_phone_number_id=$1
-            ORDER BY m.creado_en LIMIT 1 FOR UPDATE OF m SKIP LOCKED`,[config.META_PHONE_NUMBER_ID]);
+            ORDER BY m.creado_en,m.id LIMIT 1 FOR UPDATE OF m SKIP LOCKED`,[config.META_PHONE_NUMBER_ID]);
           if(!r.rowCount)return false;
           const m=r.rows[0]; id=m.id;
           if(Date.now()-new Date(m.ultima_interaccion_en).getTime()>24*60*60_000) {

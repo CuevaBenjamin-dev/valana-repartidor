@@ -5,7 +5,7 @@ import { Bd } from './bd';
 import { interpretarOpcion, Opcion, textoMenu } from './menu';
 
 interface Negocio { id:string; zona_horaria:string; dias_atencion:number[]|null; hora_inicio:string|null; hora_fin:string|null; mensaje_menu:string; mensaje_confirmacion:string; mensaje_fuera_horario:string; mensaje_sin_asesor:string; }
-interface SolicitudAbierta { id:string; asesor_id:string|null; opcion_id:string|null; creada_en:Date; en_ventana:boolean; }
+interface SolicitudAbierta { id:string; asesor_id:string|null; opcion_id:string|null; confirmacion_en:Date|null; creada_en:Date; en_ventana:boolean; }
 interface Mensaje { id:string; telefono?:string|null; metaUserId?:string|null; username?:string|null; nombre?:string; tipo:string; texto:string; identificador?:string; metaTimestamp?:string; }
 export interface FormularioWeb { origen_tipo:'postulacion'|'contacto'; origen_id:number; creada_en:Date;
   nombre:string;correo:string;telefono:string|null;idioma:'es'|'en';medio_contacto:string|null;
@@ -85,7 +85,8 @@ export class Repartidor {
     return empatados[randomInt(empatados.length)].id;
   }
   private async salida(c:PoolClient,negocioId:string,contactoId:string,texto:string,solicitudId:string|null=null) {
-    await c.query(`INSERT INTO mensajes_salientes(negocio_id,contacto_id,solicitud_id,texto) VALUES($1,$2,$3,$4)`,[negocioId,contactoId,solicitudId,texto]);
+    await c.query(`INSERT INTO mensajes_salientes(negocio_id,contacto_id,solicitud_id,texto,creado_en)
+      VALUES($1,$2,$3,$4,clock_timestamp())`,[negocioId,contactoId,solicitudId,texto]);
   }
   private async confirmar(c:PoolClient,negocio:Negocio,contactoId:string,solicitudId:string) {
     const pendiente=await c.query(`UPDATE solicitudes SET confirmacion_en=now()
@@ -134,7 +135,7 @@ export class Repartidor {
     const opciones=(await c.query<Opcion>(`SELECT id,numero,identificador,nombre,equipo_id FROM opciones_menu
       WHERE equipo_id=$1 AND activo=true ORDER BY numero`,[equipo.id])).rows;
     const opcion=interpretarOpcion(m.texto,opciones,m.identificador);
-    const abiertas=(await c.query<SolicitudAbierta>(`SELECT id,asesor_id,opcion_id,creada_en,
+    const abiertas=(await c.query<SolicitudAbierta>(`SELECT id,asesor_id,opcion_id,confirmacion_en,creada_en,
       creada_en>=now()-interval '60 seconds' AS en_ventana FROM solicitudes
       WHERE contacto_id=$1 AND equipo_id=$2 AND estado<>'cerrada' ORDER BY creada_en DESC FOR UPDATE`,[contacto.id,equipo.id])).rows;
     const reciente=abiertas[0];
@@ -144,8 +145,9 @@ export class Repartidor {
     if (reutilizada) {
       if (opcion && reutilizada.opcion_id===null) {
         await c.query('UPDATE solicitudes SET opcion_id=$2 WHERE id=$1 AND opcion_id IS NULL',[reutilizada.id,opcion.id]);
-        if(reutilizada.asesor_id && this.enHorario(negocio))await this.confirmar(c,negocio,contacto.id,reutilizada.id);
       }
+      if(reutilizada.asesor_id && !reutilizada.confirmacion_en && this.enHorario(negocio))
+        await this.confirmar(c,negocio,contacto.id,reutilizada.id);
       await c.query('UPDATE interacciones_entrantes SET solicitud_id=$2 WHERE id=$1',[insertado.rows[0].id,reutilizada.id]);
       if(reutilizada.asesor_id)await this.avisarMensaje(c,reutilizada.id,reutilizada.asesor_id);
       return;
@@ -170,8 +172,10 @@ export class Repartidor {
       VALUES($1,'solicitudes',$2,'creada')`,[negocioId,solicitudId]);
     if(!horario)await this.salida(c,negocioId,contacto.id,negocio.mensaje_fuera_horario,solicitudId);
     else if(!asignada)await this.salida(c,negocioId,contacto.id,negocio.mensaje_sin_asesor,solicitudId);
-    else if(opcion)await this.confirmar(c,negocio,contacto.id,solicitudId);
-    else await this.salida(c,negocioId,contacto.id,textoMenu(negocio.mensaje_menu,opciones),solicitudId);
+    else {
+      if(!opcion)await this.salida(c,negocioId,contacto.id,textoMenu(negocio.mensaje_menu,opciones),solicitudId);
+      await this.confirmar(c,negocio,contacto.id,solicitudId);
+    }
   }
   private async pendientesEnBloqueo(c:PoolClient,equipo:{id:string;negocio_id:string}):Promise<number> {
       const negocio=await this.negocio(c,equipo.negocio_id);
