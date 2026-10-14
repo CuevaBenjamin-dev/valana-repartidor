@@ -9,11 +9,15 @@ import { FormularioWeb, Repartidor } from './repartidor';
 
 const uuid=z.string().uuid();
 const texto=(max:number)=>z.string().trim().min(1).max(max);
+const datoAdicional=(max:number)=>z.string().trim().min(2).max(max).nullable().optional();
 const base={id:z.number().int().positive(),fecha_creacion:z.string().regex(/^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d$/),idioma:z.enum(['es','en'])};
 const formulario=z.discriminatedUnion('tipo',[
   z.object({...base,tipo:z.literal('postulacion'),nombre_estudiante:texto(120),edad_estudiante:z.number().int().min(5).max(18),
     grado:texto(24),nombre_apoderado:texto(120),telefono_apoderado:texto(25),correo_apoderado:z.email().max(254),
-    medio_contacto:z.enum(['telefono','whatsapp','correo'])}).strict(),
+    medio_contacto:z.enum(['telefono','whatsapp','correo']),
+    nombres_estudiante:datoAdicional(50),apellido_paterno_estudiante:datoAdicional(40),
+    apellido_materno_estudiante:datoAdicional(40),institucion_procedencia:datoAdicional(150),
+    parentesco_apoderado:datoAdicional(60)}).strict(),
   z.object({...base,tipo:z.literal('contacto'),nombre:texto(120),correo:z.email().max(254),telefono:z.string().max(25).nullable(),
     asunto:texto(150),mensaje:texto(3000)}).strict(),
 ]);
@@ -42,11 +46,15 @@ export class IntegracionBostonController {
     const normalizada:FormularioWeb=f.tipo==='postulacion'?{
       origen_tipo:'postulacion',origen_id:f.id,creada_en:creada,nombre:f.nombre_apoderado,correo:f.correo_apoderado,
       telefono:f.telefono_apoderado,idioma:f.idioma,medio_contacto:f.medio_contacto,estudiante:f.nombre_estudiante,
+      nombres_estudiante:f.nombres_estudiante??null,apellido_paterno_estudiante:f.apellido_paterno_estudiante??null,
+      apellido_materno_estudiante:f.apellido_materno_estudiante??null,
+      institucion_procedencia:f.institucion_procedencia??null,parentesco_apoderado:f.parentesco_apoderado??null,
       edad_estudiante:f.edad_estudiante,grado:f.grado,asunto:null,mensaje:null
     }:{
       origen_tipo:'contacto',origen_id:f.id,creada_en:creada,nombre:f.nombre,correo:f.correo,
       telefono:f.telefono,idioma:f.idioma,medio_contacto:null,estudiante:null,edad_estudiante:null,grado:null,
-      asunto:f.asunto,mensaje:f.mensaje
+      nombres_estudiante:null,apellido_paterno_estudiante:null,apellido_materno_estudiante:null,
+      institucion_procedencia:null,parentesco_apoderado:null,asunto:f.asunto,mensaje:f.mensaje
     };
     const guardada=await this.repartidor.registrarWeb(negocio.id,normalizada);
     return {ok:true,duplicado:guardada.duplicado};
@@ -71,7 +79,7 @@ export class DesdeWebController {
     exigirRol(req.usuario,['administrador','asesor']);
     return (await this.bd.consulta(`SELECT s.id,s.origen_tipo,s.origen_id,
       ('WEB-'||CASE WHEN s.origen_tipo='postulacion' THEN 'A-' ELSE 'C-' END||lpad(s.origen_id::text,4,'0')) AS codigo,
-      s.nombre,s.correo,s.telefono,s.asunto,
+      s.nombre,s.correo,s.telefono,s.estudiante,s.asunto,
       s.estado,s.creada_en,s.asignada_en,u.nombre AS asesor,
       EXISTS(SELECT 1 FROM notificaciones_web n WHERE n.solicitud_id=s.id AND n.usuario_id=$2 AND n.leida_en IS NULL) AS nueva
       FROM solicitudes_web s LEFT JOIN usuarios u ON u.id=s.asesor_id

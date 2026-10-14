@@ -18,6 +18,11 @@ beforeAll(async()=>{
 const contacto={tipo:'contacto',id:17,fecha_creacion:'2026-10-13 12:00:00',idioma:'es',
   nombre:'Persona Demo',correo:'demo@example.invalid',telefono:null,
   asunto:'Admisiones',mensaje:'Solicito información sobre vacantes'};
+const postulacion={tipo:'postulacion',id:21,fecha_creacion:'2026-10-13 12:00:00',idioma:'es',
+  nombre_estudiante:'Ana Pérez García',edad_estudiante:10,grado:'primaria_5',
+  nombre_apoderado:'Apoderado Demo',telefono_apoderado:'000000000',
+  correo_apoderado:'demo@example.invalid',medio_contacto:'whatsapp'};
+const token='Bearer test-secret-for-boston-worker-only-123456789';
 
 describe('integración privada de formularios',()=>{
   it('rechaza envíos sin credencial antes de consultar datos',async()=>{
@@ -44,6 +49,38 @@ describe('integración privada de formularios',()=>{
       {header:()=> 'Bearer test-secret-for-boston-worker-only-123456789'} as never,
       {...contacto,turnstileToken:'no-debe-reenviarse'})).rejects.toThrow('Formulario inválido');
     expect(repartidor.registrarWeb).not.toHaveBeenCalled();
+  });
+  it('acepta la postulación anterior y conserva el nombre completo',async()=>{
+    const bd={consulta:vi.fn().mockResolvedValue({rows:[{id:negocio}]})} as unknown as Bd;
+    const repartidor={registrarWeb:vi.fn().mockResolvedValue({id:solicitud,duplicado:false})} as unknown as Repartidor;
+    await new Integracion(bd,repartidor).recibir({header:()=>token} as never,postulacion);
+    expect(repartidor.registrarWeb).toHaveBeenCalledWith(negocio,expect.objectContaining({
+      estudiante:'Ana Pérez García',telefono:'000000000',nombres_estudiante:null,
+      apellido_paterno_estudiante:null,apellido_materno_estudiante:null,
+      institucion_procedencia:null,parentesco_apoderado:null
+    }));
+  });
+  it('acepta los cinco datos adicionales de Boston y los entrega para persistencia',async()=>{
+    const bd={consulta:vi.fn().mockResolvedValue({rows:[{id:negocio}]})} as unknown as Bd;
+    const repartidor={registrarWeb:vi.fn().mockResolvedValue({id:solicitud,duplicado:false})} as unknown as Repartidor;
+    await new Integracion(bd,repartidor).recibir({header:()=>token} as never,{
+      ...postulacion,nombres_estudiante:'Ana',apellido_paterno_estudiante:'Pérez',
+      apellido_materno_estudiante:'García',institucion_procedencia:'Colegio de ejemplo',
+      parentesco_apoderado:'Madre'
+    });
+    expect(repartidor.registrarWeb).toHaveBeenCalledWith(negocio,expect.objectContaining({
+      estudiante:'Ana Pérez García',nombres_estudiante:'Ana',apellido_paterno_estudiante:'Pérez',
+      apellido_materno_estudiante:'García',institucion_procedencia:'Colegio de ejemplo',
+      parentesco_apoderado:'Madre'
+    }));
+  });
+  it('admite apellido materno nulo sin alterar el formulario de contacto',async()=>{
+    const bd={consulta:vi.fn().mockResolvedValue({rows:[{id:negocio}]})} as unknown as Bd;
+    const repartidor={registrarWeb:vi.fn().mockResolvedValue({id:solicitud,duplicado:false})} as unknown as Repartidor;
+    await new Integracion(bd,repartidor).recibir({header:()=>token} as never,{
+      ...postulacion,apellido_materno_estudiante:null
+    });
+    expect(repartidor.registrarWeb).toHaveBeenCalledWith(negocio,expect.objectContaining({apellido_materno_estudiante:null}));
   });
 });
 

@@ -9,7 +9,9 @@ interface SolicitudAbierta { id:string; asesor_id:string|null; opcion_id:string|
 interface Mensaje { id:string; telefono?:string|null; metaUserId?:string|null; username?:string|null; nombre?:string; tipo:string; texto:string; identificador?:string; metaTimestamp?:string; }
 export interface FormularioWeb { origen_tipo:'postulacion'|'contacto'; origen_id:number; creada_en:Date;
   nombre:string;correo:string;telefono:string|null;idioma:'es'|'en';medio_contacto:string|null;
-  estudiante:string|null;edad_estudiante:number|null;grado:string|null;asunto:string|null;mensaje:string|null; }
+  estudiante:string|null;nombres_estudiante:string|null;apellido_paterno_estudiante:string|null;
+  apellido_materno_estudiante:string|null;institucion_procedencia:string|null;parentesco_apoderado:string|null;
+  edad_estudiante:number|null;grado:string|null;asunto:string|null;mensaje:string|null; }
 
 @Injectable()
 export class Repartidor {
@@ -216,13 +218,16 @@ export class Repartidor {
       await this.pendientesEnBloqueo(c,equipo);
       const creada=(await c.query<{id:string}>(`INSERT INTO solicitudes_web
         (negocio_id,equipo_id,origen_tipo,origen_id,nombre,correo,telefono,idioma,medio_contacto,
-         estudiante,edad_estudiante,grado,asunto,mensaje,creada_en)
-        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+         estudiante,nombres_estudiante,apellido_paterno_estudiante,apellido_materno_estudiante,
+         institucion_procedencia,parentesco_apoderado,edad_estudiante,grado,asunto,mensaje,creada_en)
+        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
         ON CONFLICT(origen_tipo,origen_id) DO NOTHING RETURNING id`,[
           equipo.negocio_id,equipo.id,formulario.origen_tipo,formulario.origen_id,formulario.nombre,
           formulario.correo,formulario.telefono,formulario.idioma,formulario.medio_contacto,
-          formulario.estudiante,formulario.edad_estudiante,formulario.grado,formulario.asunto,
-          formulario.mensaje,formulario.creada_en
+          formulario.estudiante,formulario.nombres_estudiante,formulario.apellido_paterno_estudiante,
+          formulario.apellido_materno_estudiante,formulario.institucion_procedencia,
+          formulario.parentesco_apoderado,formulario.edad_estudiante,formulario.grado,
+          formulario.asunto,formulario.mensaje,formulario.creada_en
         ])).rows[0];
       if(!creada){
         const repetida=(await c.query<{id:string}>(`SELECT id FROM solicitudes_web
