@@ -1,23 +1,29 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
-import { Send, Smile } from 'lucide-react';
+import { ArrowLeft, Send, Smile } from 'lucide-react';
 
 export type MensajeChat={id:string;solicitud_id:string;contenido:string;fecha:string;direccion:'entrante'|'saliente';estado:string;error:string|null};
 
 const nombresEstado:Record<string,string>={pendiente:'En cola',enviado:'Enviado',sent:'Enviado',delivered:'Entregado',read:'Leído',error:'Error',failed:'Error',omitido:'No enviado',recibido:'Recibido'};
 const emojis=['😊','🙂','👍','❤️','🎓','📚','✨','👋','🙌','✅','📅','🙏','😄','🎉','💬','📞'];
 
-export default function Chat({mensajes,ventanaHasta,habilitado,activo,ahora,enviar}:{
-  mensajes:MensajeChat[];ventanaHasta:string;habilitado:boolean;activo:boolean;ahora:number;
+export default function Chat({mensajes,ventanaHasta,habilitado,activo,ahora,enviar,contacto,mobileOpen,onMobileClose}:{
+  mensajes:MensajeChat[];ventanaHasta:string;habilitado:boolean;activo:boolean;ahora:number;contacto:string;
+  mobileOpen:boolean;onMobileClose:()=>void;
   enviar:(texto:string,clave:string)=>Promise<void>;
 }){
   const [texto,setTexto]=useState(''),[enviando,setEnviando]=useState(false),[error,setError]=useState(''),[mostrarEmojis,setMostrarEmojis]=useState(false);
-  const clave=useRef<string|null>(null),lista=useRef<HTMLDivElement|null>(null),campo=useRef<HTMLTextAreaElement|null>(null),estabaAbajo=useRef(true),envioEnCurso=useRef(false);
+  const clave=useRef<string|null>(null),lista=useRef<HTMLDivElement|null>(null),campo=useRef<HTMLTextAreaElement|null>(null),volver=useRef<HTMLButtonElement|null>(null),estabaAbajo=useRef(true),envioEnCurso=useRef(false);
   const ventanaAbierta=Boolean(ventanaHasta && new Date(ventanaHasta).getTime()>ahora);
   useEffect(()=>{
     const caja=lista.current;
     if(caja && estabaAbajo.current)caja.scrollTop=caja.scrollHeight;
   },[mensajes]);
+  useEffect(()=>{
+    if(!mobileOpen)return;
+    const frame=requestAnimationFrame(()=>{if(lista.current)lista.current.scrollTop=lista.current.scrollHeight;volver.current?.focus()});
+    return()=>cancelAnimationFrame(frame);
+  },[mobileOpen]);
   async function enviarTexto(e:React.FormEvent){
     e.preventDefault();
     const contenido=texto.trim();
@@ -35,8 +41,8 @@ export default function Chat({mensajes,ventanaHasta,habilitado,activo,ahora,envi
     setTexto(texto.slice(0,inicio)+emoji+texto.slice(fin));clave.current=null;setError('');setMostrarEmojis(false);
     requestAnimationFrame(()=>{entrada?.focus();entrada?.setSelectionRange(inicio+emoji.length,inicio+emoji.length)});
   }
-  return <section className="panel chat-panel" aria-label="Conversación de WhatsApp">
-    <div className="panel-head"><div><h2>Conversación de WhatsApp</h2><p>Mensajes del contacto desde el número oficial de Boston</p></div></div>
+  return <section className="panel chat-panel" aria-label="Conversación de WhatsApp" role={mobileOpen?'dialog':undefined} aria-modal={mobileOpen||undefined}>
+    <div className="panel-head chat-head"><button ref={volver} className="chat-mobile-back" type="button" onClick={onMobileClose} aria-label="Volver al detalle de la solicitud"><ArrowLeft size={20}/></button><div className="chat-head-title"><h2><span className="chat-desktop-title">Conversación de WhatsApp</span><span className="chat-mobile-title">{contacto}</span></h2><p>Desde el número oficial de Boston</p></div><span className="chat-head-mark" aria-hidden="true">BBS</span></div>
     <div className="chat-messages" ref={lista} onScroll={e=>{const x=e.currentTarget;estabaAbajo.current=x.scrollHeight-x.scrollTop-x.clientHeight<90}}>
       {mensajes.length?mensajes.map(m=><div key={m.id} className={`chat-row ${m.direccion}`}>
         <div className="chat-bubble"><div className="chat-text">{m.contenido}</div>
