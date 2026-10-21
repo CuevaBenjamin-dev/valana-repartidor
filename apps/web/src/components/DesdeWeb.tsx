@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, Check, Inbox, Search, Send } from 'lucide-react';
+import FechaIngreso from './FechaIngreso';
 
 export type SolicitudWeb={id:string;codigo:string;origen_tipo:'postulacion'|'contacto';origen_id:number;
   nombre:string;correo:string;telefono:string|null;estudiante:string|null;asunto:string|null;estado:string;creada_en:string;
@@ -15,13 +16,12 @@ const fecha=(valor:string)=>new Intl.DateTimeFormat('es-PE',{timeZone:'America/L
 const estado=(valor:string)=>({pendiente_asignacion:'Sin asignar',pendiente:'Nuevo',en_atencion:'En atención',cerrada:'Cerrada'} as Record<string,string>)[valor]||valor;
 const grado=(valor:string|null)=>valor?.replace('_',' ').replace(/^./,c=>c.toUpperCase())||'—';
 
-export default function DesdeWeb({solicitudes,consultar,onActualizar,abrirId,rol}:{solicitudes:SolicitudWeb[];
-  consultar:Consultar;onActualizar:()=>Promise<unknown>;abrirId:string|null;rol:'asesor'|'administrador'}) {
-  const [id,setId]=useState<string|null>(null),[detalle,setDetalle]=useState<DetalleWeb|null>(null);
+export default function DesdeWeb({solicitudes,consultar,onActualizar,id,onAbrir,onCerrar,rol}:{solicitudes:SolicitudWeb[];
+  consultar:Consultar;onActualizar:()=>Promise<unknown>;id:string|null;onAbrir:(id:string)=>void;onCerrar:()=>void;rol:'asesor'|'administrador'}) {
+  const [detalle,setDetalle]=useState<DetalleWeb|null>(null);
   const [nota,setNota]=useState(''),[filtro,setFiltro]=useState('todas'),[busqueda,setBusqueda]=useState('');
   const [error,setError]=useState(''),[exito,setExito]=useState(''),[ocupado,setOcupado]=useState(false);
   const revision=useRef(0),lectura=useRef<string|null>(null);
-  useEffect(()=>{if(abrirId)setId(abrirId)},[abrirId]);
   useEffect(()=>{
     const actual=++revision.current;
     if(!id){setDetalle(null);return}
@@ -62,20 +62,21 @@ export default function DesdeWeb({solicitudes,consultar,onActualizar,abrirId,rol
       <section className="panel"><div className="panel-head"><div><h2>Solicitudes web</h2><p>{lista.length} resultados</p></div></div>
           <div className="toolbar"><div className="search"><Search size={16}/><input value={busqueda} onChange={e=>setBusqueda(e.target.value)} placeholder="Buscar por estudiante, apoderado, correo o código"/></div>
           <div className="filters">{[['todas','Todas'],['nuevo','Nuevo'],['en_atencion','En atención'],['cerrada','Cerradas']].map(([clave,texto])=><button key={clave} className={filtro===clave?'selected':''} onClick={()=>setFiltro(clave)}>{texto}</button>)}</div></div>
-        {lista.length?<div className="table-wrap"><table><thead><tr><th>Solicitud</th><th>Contacto</th><th>Formulario</th><th>Ingreso</th><th>Estado</th><th>Asesor</th><th></th></tr></thead><tbody>
-          {lista.map(s=><tr key={s.id}><td><button className="link-button" onClick={()=>setId(s.id)}>{s.codigo}</button>{s.nueva&&<span style={{color:'#de8c60',marginLeft:8}}>●</span>}</td>
+        {lista.length?<div className="table-wrap request-list web-request-list"><table><thead><tr><th>Solicitud</th><th>Contacto</th><th>Formulario</th><th>Ingreso</th><th>Estado</th><th>Asesor</th><th></th></tr></thead><tbody>
+          {lista.map(s=><tr key={s.id}><td><button className="link-button" onClick={()=>onAbrir(s.id)}>{s.codigo}</button>{s.nueva&&<span style={{color:'#de8c60',marginLeft:8}}>●</span>}</td>
             <td><strong>{s.origen_tipo==='postulacion'?(s.estudiante||s.nombre):s.nombre}</strong>
               <div style={{fontSize:11,color:'#9ba8b5',marginTop:4}}>{s.origen_tipo==='postulacion'?`Apoderado: ${s.nombre} · ${s.correo}`:s.correo}</div></td>
-            <td>{s.origen_tipo==='postulacion'?'Admisión':'Contacto'}</td><td>{fecha(s.creada_en)}</td>
+            <td>{s.origen_tipo==='postulacion'?'Admisión':'Contacto'}</td><td><FechaIngreso valor={s.creada_en}/></td>
             <td><span className={`badge ${s.estado}`}>{estado(s.estado)}</span></td><td>{s.asesor||'—'}</td>
-            <td><button className="btn small" onClick={()=>setId(s.id)}>Ver detalle</button></td></tr>)}</tbody></table></div>
+            <td><button className="btn small" onClick={()=>onAbrir(s.id)}>Ver detalle</button></td></tr>)}</tbody></table></div>
           :<div className="empty"><Inbox size={28}/><h3>Sin solicitudes web</h3><p>Los próximos formularios aparecerán aquí.</p></div>}
       </section>
     </>:<>
-      <button className="btn text" onClick={()=>{setId(null);setDetalle(null);setError('');setExito('')}} style={{marginBottom:15}}><ArrowLeft size={16}/>Volver a Desde Web</button>
+      <button className="btn text" onClick={onCerrar} style={{marginBottom:15}}><ArrowLeft size={16}/>Volver</button>
       {!detalle || detalle.solicitud.id!==id?<div className="panel section">Cargando detalle…</div>:<>
         <div className="heading"><div><p className="eyebrow">SOLICITUD DESDE WEB</p><h1>{detalle.solicitud.codigo}</h1>
-          <p className="muted">{detalle.solicitud.origen_tipo==='postulacion'?'Admisión':'Contacto'} · ingresó {fecha(detalle.solicitud.creada_en)}</p></div>
+          <p className="muted detail-service">{detalle.solicitud.origen_tipo==='postulacion'?'Admisión':'Contacto'}</p>
+          <FechaIngreso valor={detalle.solicitud.creada_en} etiqueta/></div>
           <span className={`badge ${detalle.solicitud.estado}`}>{estado(detalle.solicitud.estado)}</span></div>
         <div className="split"><section className="panel"><div className="panel-head"><h2>Datos recibidos</h2></div><div className="section">
           <div className="field-grid"><div className="field"><small>{detalle.solicitud.origen_tipo==='postulacion'?'APODERADO':'NOMBRE'}</small><strong>{detalle.solicitud.nombre}</strong></div>

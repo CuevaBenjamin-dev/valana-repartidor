@@ -328,6 +328,13 @@ td strong,
 }
 
 .request-actions{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-bottom:15px}
+.fecha-ingreso{display:inline-flex;flex-direction:column;gap:2px;vertical-align:middle;line-height:1.35;white-space:normal}
+.fecha-ingreso strong{font-size:13px;color:#123b8c;font-weight:700}
+.fecha-ingreso>span:last-child{font-size:12px;color:#60758e}
+.fecha-ingreso.con-etiqueta{gap:3px;border-left:3px solid #f36b0a;padding:4px 0 4px 11px}
+.fecha-ingreso-etiqueta{font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#6b7f99}
+.detail-service{display:block;margin-bottom:10px!important}
+.heading .muted .fecha-ingreso{display:inline-flex}
 .mobile-chat-trigger,.chat-mobile-back,.chat-mobile-title{display:none}
 .chat-panel{display:flex;flex-direction:column;min-height:530px}
 .chat-head{background:#fff;padding:16px 19px;gap:12px}
@@ -390,10 +397,11 @@ td strong,
 
 @media (max-width:760px){
   .mobile-nav{flex-wrap:wrap;justify-content:center;overflow:visible;padding:7px 6px;gap:3px}
-  .mobile-nav button{padding:9px 7px}
-  .mobile-nav .mobile-availability{border-radius:20px;padding:7px 10px;font-size:11px;line-height:1.2}
-  .mobile-nav .mobile-availability.on{background:#e6f5ed;color:#16613d}
-  .mobile-nav .mobile-availability.off{background:#f3f4f7;color:#59677b}
+  .mobile-nav button{padding:9px 6px;font-size:11px}
+  .mobile-nav .mobile-availability{display:grid;place-items:center;width:34px;height:34px;padding:0;border:0;border-radius:50%;background:transparent}
+  .mobile-nav .mobile-availability .availability-dot{width:12px;height:12px;border-radius:50%;background:#39bd79;box-shadow:0 0 0 3px #39bd792b}
+  .mobile-nav .mobile-availability.off .availability-dot{background:#aeb8c5;box-shadow:none}
+  .mobile-nav .mobile-availability:focus-visible{outline:3px solid #f36b0a;outline-offset:2px}
 
   .request-list{overflow:visible}
   .request-list table,.request-list tbody{display:block;width:100%}
@@ -408,6 +416,7 @@ td strong,
   .request-list td:nth-child(6){grid-area:advisor;align-self:center;color:#667b96}
   .request-list td:nth-child(7){grid-area:action;justify-self:end}
   .request-list td:nth-child(3)::before{content:'Servicio: ';font-weight:700;color:#667b96}
+  .web-request-list td:nth-child(3)::before{content:'Formulario: '}
   .request-list td:nth-child(4)::before{content:'Ingreso: ';font-weight:700}
   .request-list td:nth-child(6)::before{content:'Asesor: ';font-weight:700}
 
