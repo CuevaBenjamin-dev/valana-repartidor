@@ -312,7 +312,7 @@ td strong,
 
 @media (max-width: 760px) {
   .topbar {
-    min-height: 70px;
+    display: none;
   }
 
   .form-logo {
@@ -346,13 +346,9 @@ td strong,
 .chat-empty{text-align:center;color:#75869b;font-size:13px;margin:auto}
 .chat-compose{border-top:1px solid #dfe7f3;padding:14px 16px 12px;background:#fff}
 .chat-compose-row{display:flex;align-items:flex-end;gap:8px}
-.chat-compose-row .textarea{min-height:44px;max-height:160px;border-radius:15px;background:#f8fafd;resize:vertical}
+.chat-compose-row .textarea{min-width:0;flex:1;min-height:44px;max-height:160px;border-radius:15px;background:#f8fafd;resize:vertical}
 .chat-compose-row .btn{height:44px}
 .chat-compose-row .btn.primary{width:44px;flex:0 0 44px;padding:0;border-radius:50%}
-.chat-emoji-button{flex:0 0 44px;padding:0;display:grid;place-items:center;color:#55708c;border-radius:50%}
-.chat-emoji-picker{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:4px;max-width:350px;margin-top:9px;padding:7px;border:1px solid #dbe5f1;border-radius:10px;background:#fff;box-shadow:0 8px 24px #1e35541a}
-.chat-emoji-picker button{min-height:37px;border:0;border-radius:7px;background:transparent;font-size:20px;cursor:pointer}
-.chat-emoji-picker button:hover,.chat-emoji-picker button:focus-visible{background:#eef4fb}
 .chat-compose small{display:block;color:#8998a8;font-size:10px;margin-top:5px;text-align:right}
 .chat-window-warning{background:#fff4e6;color:#805122;border-radius:8px;padding:9px 11px;margin:0 0 12px;font-size:12px}
 @media (max-width:760px){
@@ -391,3 +387,41 @@ td strong,
 .profile-footer{display:flex;gap:9px;flex-wrap:wrap;margin-top:21px}
 .management-panel .panel-head{padding:15px 20px}.management-panel .section{padding:17px 20px 20px}.management-panel .note-area{min-height:94px}.management-panel .saved-notes{margin-top:18px;border-top:1px solid var(--linea);padding-top:16px}.management-panel .saved-notes h3{margin:0 0 12px;font-size:13px}.management-panel .item{margin-bottom:14px}
 @media(max-width:760px){.profile-fields{grid-template-columns:1fr}.profile-head,.profile-body{padding:18px}.profile-footer .btn{flex:1}}
+
+@media (max-width:760px){
+  .mobile-nav{flex-wrap:wrap;justify-content:center;overflow:visible;padding:7px 6px;gap:3px}
+  .mobile-nav button{padding:9px 7px}
+  .mobile-nav .mobile-availability{border-radius:20px;padding:7px 10px;font-size:11px;line-height:1.2}
+  .mobile-nav .mobile-availability.on{background:#e6f5ed;color:#16613d}
+  .mobile-nav .mobile-availability.off{background:#f3f4f7;color:#59677b}
+
+  .request-list{overflow:visible}
+  .request-list table,.request-list tbody{display:block;width:100%}
+  .request-list thead{display:none}
+  .request-list tr{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:'code status' 'contact contact' 'service service' 'date date' 'advisor action';gap:8px 10px;margin:12px;padding:14px;border:1px solid #dce5f2;border-radius:12px;background:#fff}
+  .request-list td{display:block;min-width:0;white-space:normal;overflow-wrap:anywhere;border:0;padding:0;font-size:12px}
+  .request-list td:nth-child(1){grid-area:code;align-self:center;font-size:14px}
+  .request-list td:nth-child(2){grid-area:contact;font-size:13px}
+  .request-list td:nth-child(3){grid-area:service}
+  .request-list td:nth-child(4){grid-area:date;color:#667b96}
+  .request-list td:nth-child(5){grid-area:status;justify-self:end}
+  .request-list td:nth-child(6){grid-area:advisor;align-self:center;color:#667b96}
+  .request-list td:nth-child(7){grid-area:action;justify-self:end}
+  .request-list td:nth-child(3)::before{content:'Servicio: ';font-weight:700;color:#667b96}
+  .request-list td:nth-child(4)::before{content:'Ingreso: ';font-weight:700}
+  .request-list td:nth-child(6)::before{content:'Asesor: ';font-weight:700}
+
+  .request-detail{padding:16px 10px 32px}
+  .request-detail .heading{margin-bottom:16px;gap:10px}
+  .request-detail .heading h1{font-size:25px;line-height:1.15;overflow-wrap:anywhere}
+  .request-detail .heading .muted{font-size:12px}
+  .request-detail .detail-grid{gap:12px}
+  .request-detail .detail-grid .panel-head,.request-detail .detail-grid .section{padding:14px}
+  .request-detail .field-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:15px 10px}
+  .request-detail .field-grid .field:nth-child(-n+2){grid-column:1/-1}
+  .request-detail .field{min-width:0;overflow-wrap:anywhere}
+  .request-detail .field small{margin-bottom:4px}
+  .request-detail .field strong{font-size:13px}
+  .request-detail .request-actions{margin-bottom:10px}
+  .request-detail .note-area{min-height:80px}
+}
