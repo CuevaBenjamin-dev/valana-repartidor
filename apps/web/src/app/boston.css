@@ -133,6 +133,14 @@ select:focus-visible {
   background: radial-gradient(circle at 95% 0%, #e9effb 0, transparent 360px);
 }
 
+.app {
+  min-height: 100dvh;
+}
+
+.sidebar {
+  height: 100dvh;
+}
+
 .eyebrow {
   color: #b9112b;
 }
@@ -504,6 +512,7 @@ td strong,
 
 .login-page {
   background: #fff;
+  min-height: 100dvh;
 }
 
 .login-art {
@@ -629,7 +638,7 @@ td strong,
   .chat-mobile-title{display:inline;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .chat-head-title h2{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .chat-head-title p{margin-top:3px;font-size:11px}
-  .chat-messages{min-height:0;max-height:none;padding:18px 14px;overscroll-behavior:contain}
+  .chat-messages{min-height:0;max-height:none;padding:18px 14px}
   .chat-bubble{max-width:88%}
   .chat-compose{padding:11px 12px calc(9px + env(safe-area-inset-bottom))}
   .chat-compose .form-label{margin-bottom:6px}
@@ -656,6 +665,7 @@ td strong,
 @media(max-width:760px){.profile-fields{grid-template-columns:1fr}.profile-head,.profile-body{padding:18px}.profile-footer .btn{flex:1}}
 
 @media (max-width:760px){
+  .content{padding-bottom:16px}
   .mobile-nav{flex-wrap:wrap;justify-content:center;overflow:visible;padding:7px 6px;gap:3px}
   .mobile-nav button{padding:9px 6px;font-size:11px}
   .mobile-nav .mobile-availability{display:grid;place-items:center;width:34px;height:34px;padding:0;border:0;border-radius:50%;background:transparent}
@@ -663,8 +673,7 @@ td strong,
   .mobile-nav .mobile-availability.off .availability-dot{background:#aeb8c5;box-shadow:none}
   .mobile-nav .mobile-availability:focus-visible{outline:3px solid #f36b0a;outline-offset:2px}
 
-  .availability-page{min-height:100dvh}
-  .availability-page .content{padding-top:18px;padding-bottom:16px}
+  .availability-page .content{padding-top:18px}
   .availability-page .heading{margin-bottom:18px}
   .availability-page .panel-head{padding:14px 16px}
   .advisor-status-list{padding:10px}
@@ -688,7 +697,7 @@ td strong,
   .request-list td:nth-child(4)::before{content:'Ingreso: ';font-weight:700}
   .request-list td:nth-child(6)::before{content:'Asesor: ';font-weight:700}
 
-  .request-detail{padding:16px 10px 32px}
+  .request-detail{padding:16px 10px}
   .request-detail .heading{margin-bottom:16px;gap:10px}
   .request-detail .heading h1{font-size:25px;line-height:1.15;overflow-wrap:anywhere}
   .request-detail .heading .muted{font-size:12px}
