@@ -690,9 +690,14 @@ td strong,
 
 @media (max-width:760px){
   .content{padding-bottom:16px}
-  .mobile-nav{flex-wrap:wrap;justify-content:center;overflow:visible;padding:7px 6px;gap:3px}
-  .mobile-nav button{padding:9px 6px;font-size:11px}
-  .mobile-nav .mobile-availability{display:grid;place-items:center;width:34px;height:34px;padding:0;border:0;border-radius:50%;background:transparent}
+  .mobile-nav{flex-direction:column;align-items:stretch;overflow:visible;padding:7px 10px 8px;gap:0}
+  .mobile-nav-links{display:flex;justify-content:center;flex-wrap:wrap;gap:3px}
+  .mobile-nav-links button{padding:9px 6px;font-size:11px}
+  .mobile-nav-utilities{display:flex;align-items:center;gap:8px;width:100%;margin-top:5px;padding-top:6px;border-top:1px solid #ffffff2b}
+  .mobile-nav-utilities button{min-height:40px;font-size:11px}
+  .mobile-nav .mobile-profile,.mobile-nav .mobile-logout{display:inline-flex;align-items:center;gap:7px;padding:5px 8px}
+  .mobile-nav .mobile-profile .avatar{width:27px;height:27px;flex:0 0 27px;font-size:10px}
+  .mobile-nav .mobile-availability{display:grid;place-items:center;width:44px;height:44px;min-height:44px;margin-left:auto;padding:0;border:1px solid #ffffff3a;border-radius:50%;background:#ffffff12}
   .mobile-nav .mobile-availability .availability-dot{width:12px;height:12px;border-radius:50%;background:#39bd79;box-shadow:0 0 0 3px #39bd792b}
   .mobile-nav .mobile-availability.off .availability-dot{background:#aeb8c5;box-shadow:none}
   .mobile-nav .mobile-availability:focus-visible{outline:3px solid #f36b0a;outline-offset:2px}
