@@ -190,6 +190,71 @@ select:focus-visible {
   background: #c70b26;
 }
 
+.advisor-status-list {
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
+  gap: 12px;
+  margin: 0;
+  padding: 16px;
+}
+
+.advisor-status-item {
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid #dce5f2;
+  border-radius: 10px;
+}
+
+.advisor-status-primary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.advisor-status-primary strong {
+  overflow-wrap: anywhere;
+}
+
+.advisor-eligibility {
+  padding: 5px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.advisor-eligibility.yes {
+  background: #e5f5eb;
+  color: #17613c;
+}
+
+.advisor-eligibility.no {
+  background: #f1f3f6;
+  color: #526174;
+}
+
+.advisor-status-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid #e6ecf5;
+}
+
+.advisor-status-facts small {
+  display: block;
+  margin-bottom: 4px;
+  color: #687c98;
+}
+
+.advisor-status-facts span {
+  font-size: 13px;
+}
+
 .stat:nth-child(4n + 3):before {
   background: #f36b0a;
 }
@@ -417,6 +482,14 @@ td strong,
   .mobile-nav .mobile-availability .availability-dot{width:12px;height:12px;border-radius:50%;background:#39bd79;box-shadow:0 0 0 3px #39bd792b}
   .mobile-nav .mobile-availability.off .availability-dot{background:#aeb8c5;box-shadow:none}
   .mobile-nav .mobile-availability:focus-visible{outline:3px solid #f36b0a;outline-offset:2px}
+
+  .availability-page{min-height:100dvh}
+  .availability-page .content{padding-top:18px;padding-bottom:16px}
+  .availability-page .heading{margin-bottom:18px}
+  .availability-page .panel-head{padding:14px 16px}
+  .advisor-status-list{padding:10px}
+  .advisor-status-item{padding:12px}
+  .advisor-status-facts{margin-top:10px;padding-top:10px}
 
   .request-list{overflow:visible}
   .request-list table,.request-list tbody{display:block;width:100%}
