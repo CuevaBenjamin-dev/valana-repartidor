@@ -120,7 +120,8 @@ export class SolicitudesController {
       AND ($4::text IS NULL OR $4='todas' OR s.estado=$4)
       AND ($5::text IS NULL OR s.codigo ILIKE '%'||$5||'%'
         OR ('Solicitud '||lpad(s.numero::text,4,'0')) ILIKE '%'||$5||'%' OR c.telefono ILIKE '%'||$5||'%'
-        OR c.nombre_whatsapp ILIKE '%'||$5||'%' OR c.username_whatsapp ILIKE '%'||$5||'%')
+        OR c.nombre_confirmado ILIKE '%'||$5||'%' OR c.nombre_whatsapp ILIKE '%'||$5||'%'
+        OR c.username_whatsapp ILIKE '%'||$5||'%')
       ORDER BY s.creada_en DESC LIMIT 200`,[req.usuario.negocio_id,req.usuario.id,req.usuario.rol,estado||null,buscar?.slice(0,80)||null]);
     return r.rows.map(mostrarCodigo);
   }
@@ -152,6 +153,32 @@ export class SolicitudesController {
       `SELECT ultima_interaccion_en+interval '24 hours' AS ventana_hasta FROM contactos WHERE id=$1`,[s.contacto_id])).rows[0]?.ventana_hasta;
     return {solicitud:mostrarCodigo(principal.rows[0]),notas:notas.rows,interacciones:interacciones.rows,
       mensajes:mensajes.rows.reverse(),ventana_hasta:ventanaHasta,envio_configurado:metaConfigurado};
+  }
+  @Patch(':id/contacto/nombre')
+  async renombrarContacto(@Req() req:SolicitudAutenticada,@Param('id') id:string,@Body() datos:unknown) {
+    validar(uuid,id);
+    const {nombre}=validar(z.object({nombre:z.string().trim().min(1).max(120)}).strict(),datos);
+    return this.bd.transaccion(async c=>{
+      const autorizado=await c.query<{contacto_id:string}>(`SELECT s.contacto_id FROM solicitudes s
+        JOIN miembros_equipo me ON me.equipo_id=s.equipo_id AND me.usuario_id=$2 AND me.activo
+        WHERE s.id=$1 AND s.negocio_id=$3
+          AND (s.asesor_id=$2 OR $4 IN ('supervisor','administrador')) FOR UPDATE OF s`,
+        [id,req.usuario.id,req.usuario.negocio_id,req.usuario.rol]);
+      if(!autorizado.rowCount)throw new NotFoundException('Solicitud no encontrada');
+      const contactoId=autorizado.rows[0].contacto_id;
+      const actualizado=await c.query<{nombre_confirmado:string}>(`UPDATE contactos SET nombre_confirmado=$2
+        WHERE id=$1 AND negocio_id=$3 RETURNING nombre_confirmado`,[contactoId,nombre,req.usuario.negocio_id]);
+      if(!actualizado.rowCount)throw new NotFoundException('Contacto no encontrado');
+      await c.query(`INSERT INTO registro_auditoria(negocio_id,usuario_id,entidad,entidad_id,accion)
+        VALUES($1,$2,'contactos',$3,'renombrar_contacto')`,[req.usuario.negocio_id,req.usuario.id,contactoId]);
+      await c.query(`SELECT pg_notify('valana_usuario',destino.asesor_id::text) FROM (
+        SELECT DISTINCT asesor_id FROM solicitudes WHERE contacto_id=$1 AND asesor_id IS NOT NULL
+      ) destino`,[contactoId]);
+      await c.query(`SELECT pg_notify('valana_equipo',destino.equipo_id::text) FROM (
+        SELECT DISTINCT equipo_id FROM solicitudes WHERE contacto_id=$1
+      ) destino`,[contactoId]);
+      return {nombre:actualizado.rows[0].nombre_confirmado};
+    });
   }
   @Post(':id/mensajes') @HttpCode(200)
   async enviarMensaje(@Req() req:SolicitudAutenticada,@Param('id') id:string,@Body() datos:unknown) {

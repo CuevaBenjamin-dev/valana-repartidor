@@ -602,10 +602,21 @@ td strong,
 .fecha-ingreso-etiqueta{font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#6b7f99}
 .detail-service{display:block;margin-bottom:10px!important}
 .heading .muted .fecha-ingreso{display:inline-flex}
-.mobile-chat-trigger,.chat-mobile-back,.chat-mobile-title{display:none}
+.contact-name-editor{min-width:0;max-width:100%}
+.contact-name-display,.contact-name-form{display:flex;align-items:center;gap:6px;min-width:0}
+.contact-name-display strong{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.field .contact-name-display strong{white-space:normal;overflow-wrap:anywhere}
+.contact-name-form .form-input{min-width:0;width:min(260px,100%);height:34px;padding:6px 9px}
+.contact-name-action{width:30px;height:30px;flex:0 0 30px;display:grid;place-items:center;border:1px solid #d5e0ee;border-radius:8px;background:#fff;color:#123b8c}
+.contact-name-action:hover{background:#edf3fc}
+.contact-name-action.save{background:#e8f3ed;color:#236844;border-color:#badbc9}
+.contact-name-error{display:block;margin-top:5px;color:#a43939;font-size:11px;text-transform:none;letter-spacing:normal}
+.mobile-chat-trigger,.chat-mobile-back{display:none}
 .chat-panel{display:flex;flex-direction:column;min-height:530px}
 .chat-head{background:#fffdfb;padding:16px 19px;gap:12px}
 .chat-head-title{min-width:0;flex:1}
+.chat-head-title .contact-name-editor{margin-top:5px}
+.chat-head-title .contact-name-display strong{font-size:13px;color:#153558}
 .chat-head-title p{color:#7185a0}
 .chat-head-mark{width:34px;height:34px;flex:0 0 34px;display:grid;place-items:center;border-radius:50%;background:#e9effb;color:#123b8c;font-family:Georgia,serif;font-size:11px;font-weight:800;border-bottom:2px solid #f36b0a}
 .chat-messages{flex:1;min-height:350px;max-height:65vh;overflow-y:auto;padding:22px;background:radial-gradient(circle at 8% 6%,#e4efff 0,transparent 40%),radial-gradient(circle at 92% 90%,#fff0e4 0,transparent 34%),#f6f8fd;scrollbar-color:#aebfdb transparent}
@@ -621,6 +632,18 @@ td strong,
 .chat-empty{text-align:center;color:#75869b;font-size:13px;margin:auto}
 .chat-compose{border-top:1px solid #d5e1f2;padding:14px 16px 12px;background:#fff}
 .chat-compose-row{display:flex;align-items:flex-end;gap:8px}
+.chat-input-wrap{position:relative;min-width:0;flex:1}
+.chat-input-wrap .textarea{padding-right:43px}
+.chat-emoji-wrap{position:absolute;right:7px;bottom:7px;z-index:5}
+.chat-emoji-button{width:31px;height:31px;display:grid;place-items:center;border:0;border-radius:8px;background:transparent;color:#45689b}
+.chat-emoji-button:hover,.chat-emoji-button[aria-expanded="true"]{background:#e5edfa;color:#123b8c}
+.chat-emoji-picker{position:absolute;right:0;bottom:calc(100% + 10px);width:min(330px,calc(100vw - 24px));max-height:min(290px,45dvh);overflow:hidden;display:flex;flex-direction:column;border:1px solid #cbd9ed;border-radius:12px;background:#fff;box-shadow:0 10px 30px #102a6330}
+.chat-emoji-tabs{display:flex;gap:4px;padding:8px;border-bottom:1px solid #e0e7f2}
+.chat-emoji-tabs button{flex:1;border:0;border-radius:6px;background:transparent;padding:7px 3px;color:#536b8b;font-size:11px;font-weight:700}
+.chat-emoji-tabs button.active{background:#e8effb;color:#123b8c}
+.chat-emoji-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;padding:8px;overflow-y:auto}
+.chat-emoji-grid button{display:grid;place-items:center;min-height:36px;border:0;border-radius:7px;background:#fff;font-size:23px;line-height:1}
+.chat-emoji-grid button:hover{background:#edf3fc}
 .chat-compose-row .textarea{min-width:0;flex:1;min-height:44px;max-height:160px;border-color:#d4e0ef;border-radius:15px;background:#f7f9fe;resize:none}
 .chat-compose-row .textarea:focus{border-color:#2c5aae;box-shadow:0 0 0 3px #2c5aae24}
 .chat-compose-row .btn{height:44px}
@@ -635,8 +658,9 @@ td strong,
   .chat-head{padding:12px 16px;min-height:66px;background-image:linear-gradient(90deg,#123b8c 0 34%,#c70b26 34% 67%,#f36b0a 67%);background-repeat:no-repeat;background-size:100% 3px;background-position:top}
   .chat-mobile-back{display:grid;place-items:center;width:36px;height:36px;flex:0 0 36px;padding:0;border:0;border-radius:50%;background:#edf2fb;color:#123b8c}
   .chat-desktop-title{display:none}
-  .chat-mobile-title{display:inline;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .chat-head-title h2{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .chat-head-title h2{display:none}
+  .chat-head-title .contact-name-editor{margin-top:0}
+  .chat-head-title .contact-name-display strong{font-size:16px}
   .chat-head-title p{margin-top:3px;font-size:11px}
   .chat-messages{min-height:0;max-height:none;padding:18px 14px}
   .chat-bubble{max-width:88%}
