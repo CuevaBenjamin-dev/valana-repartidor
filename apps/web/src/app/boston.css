@@ -686,6 +686,38 @@ td strong,
 .profile-help{font-size:12px;color:#75869b;line-height:1.5;margin:0 0 17px}
 .profile-footer{display:flex;gap:9px;flex-wrap:wrap;margin-top:21px}
 .management-panel .panel-head{padding:15px 20px}.management-panel .section{padding:17px 20px 20px}.management-panel .note-area{min-height:94px}.management-panel .saved-notes{margin-top:18px;border-top:1px solid var(--linea);padding-top:16px}.management-panel .saved-notes h3{margin:0 0 12px;font-size:13px}.management-panel .item{margin-bottom:14px}
+.request-detail{padding-top:22px}
+.request-overview{position:relative;overflow:hidden;margin-bottom:16px;padding:17px 20px 15px;background:#fff;border:1px solid #d9e3f0;border-radius:12px;box-shadow:0 3px 12px #21344a08}
+.request-overview::before{content:"";position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,#123b8c 0 34%,#c70b26 34% 67%,#f36b0a 67%)}
+.request-overview-main{display:grid;grid-template-columns:38px minmax(0,1fr) auto;align-items:center;gap:12px}
+.request-back{display:grid;place-items:center;width:38px;height:38px;padding:0;border:1px solid #d5e0ee;border-radius:9px;background:#f3f6fc;color:#123b8c}
+.request-back:hover{background:#e7effb}
+.request-back:focus-visible,.request-notes summary:focus-visible{outline:3px solid #f36b0a;outline-offset:2px}
+.request-overview-title{min-width:0}
+.request-overview-title span{display:block;color:#a31932;font-size:10px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase}
+.request-overview-title h1{margin:2px 0 0;color:#0c2866;font-family:Georgia,serif;font-size:24px;line-height:1.1;font-weight:700;overflow-wrap:anywhere}
+.request-overview-meta{display:flex;align-items:center;gap:22px;margin:13px 0 0 50px;padding-top:11px;border-top:1px solid #e9eef6}
+.request-overview-service{display:flex;flex-direction:column;gap:2px;min-width:0}
+.request-overview-service span{color:#6b7f99;font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase}
+.request-overview-service strong{color:#173c78;font-size:13px;overflow-wrap:anywhere}
+.request-overview .fecha-ingreso{padding-top:1px;padding-bottom:1px}
+.request-detail-primary{min-width:0}
+.request-detail .contact-panel{margin-bottom:14px}
+.request-detail .contact-panel .panel-head,.request-detail .management-panel .panel-head{padding:13px 18px}
+.request-detail .contact-panel .section,.request-detail .management-panel .section{padding:15px 18px}
+.request-detail .contact-panel .field-grid{grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,.75fr);gap:14px}
+.request-detail .contact-panel .field{min-width:0;overflow-wrap:anywhere}
+.request-detail .request-actions{margin-bottom:0}
+.request-notes{margin-top:12px;border:1px solid #dde6f1;border-radius:9px;background:#fbfcff}
+.request-notes summary{display:flex;align-items:center;gap:9px;min-height:44px;padding:10px 13px;cursor:pointer;list-style:none;color:#173c78;font-size:13px;font-weight:700}
+.request-notes summary::-webkit-details-marker{display:none}
+.request-notes summary .request-notes-count{margin-left:auto;color:#68809d;font-size:11px;font-weight:600}
+.request-notes summary svg{flex:0 0 auto;transition:transform .15s ease}
+.request-notes[open] summary svg{transform:rotate(180deg)}
+.request-notes-body{padding:14px;border-top:1px solid #e4ebf4}
+.request-notes-body .note-area{display:block;margin-bottom:10px}
+.request-notes-body .saved-notes{margin-top:16px}
+@media(min-width:761px){.request-detail .mobile-chat-only{display:none}}
 @media(max-width:760px){.profile-fields{grid-template-columns:1fr}.profile-head,.profile-body{padding:18px}.profile-footer .btn{flex:1}}
 
 @media (max-width:760px){
@@ -729,17 +761,27 @@ td strong,
   .request-list td:nth-child(4)::before{content:'Ingreso: ';font-weight:700}
   .request-list td:nth-child(6)::before{content:'Asesor: ';font-weight:700}
 
-  .request-detail{padding:16px 10px}
-  .request-detail .heading{margin-bottom:16px;gap:10px}
-  .request-detail .heading h1{font-size:25px;line-height:1.15;overflow-wrap:anywhere}
-  .request-detail .heading .muted{font-size:12px}
+  .request-detail{padding:12px 10px 16px}
+  .request-overview{padding:13px 14px 12px;margin-bottom:12px}
+  .request-overview-main{gap:9px}
+  .request-overview-title h1{font-size:20px}
+  .request-overview-meta{gap:14px;margin:10px 0 0;padding-top:10px}
+  .request-overview-service,.request-overview .fecha-ingreso{flex:1;min-width:0}
+  .request-overview .fecha-ingreso{padding-left:9px}
+  .request-overview .fecha-ingreso strong{font-size:11px}
+  .request-overview .fecha-ingreso>span:last-child{font-size:11px}
   .request-detail .detail-grid{gap:12px}
-  .request-detail .detail-grid .panel-head,.request-detail .detail-grid .section{padding:14px}
-  .request-detail .field-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:15px 10px}
-  .request-detail .field-grid .field:nth-child(-n+2){grid-column:1/-1}
+  .request-detail .contact-panel .panel-head,.request-detail .management-panel .panel-head{padding:12px 14px}
+  .request-detail .contact-panel .section,.request-detail .management-panel .section{padding:13px 14px}
+  .request-detail .contact-panel .field-grid{grid-template-columns:1fr;gap:12px}
   .request-detail .field{min-width:0;overflow-wrap:anywhere}
   .request-detail .field small{margin-bottom:4px}
   .request-detail .field strong{font-size:13px}
-  .request-detail .request-actions{margin-bottom:10px}
+  .request-detail .request-actions{gap:8px}
+  .request-detail .request-actions .btn{min-height:42px}
   .request-detail .note-area{min-height:80px}
+}
+@media(max-width:380px){
+  .request-overview-main{grid-template-columns:38px minmax(0,1fr)}
+  .request-overview-main .badge{grid-column:2;justify-self:start}
 }
