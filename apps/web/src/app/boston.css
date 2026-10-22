@@ -315,6 +315,14 @@ td strong,
     display: none;
   }
 
+  .login-page {
+    height: 100vh;
+    height: 100dvh;
+    min-height: 0;
+    grid-template-rows: minmax(0, 1fr);
+    overflow: hidden;
+  }
+
   .form-logo {
     display: block;
     width: min(280px, 100%);
@@ -322,8 +330,15 @@ td strong,
     margin: 0 auto 18px;
   }
 
-  .login-box {
-    padding: 26px;
+  .login-page .login-box {
+    min-height: 0;
+    height: 100%;
+    display: flex;
+    align-items: safe center;
+    justify-content: center;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 16px 26px;
   }
 }
 
