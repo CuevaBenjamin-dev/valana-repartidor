@@ -16,7 +16,7 @@ export class SupervisionController {
       this.bd.consulta(`SELECT s.estado,COUNT(*)::int AS total FROM solicitudes s JOIN miembros_equipo me ON me.equipo_id=s.equipo_id AND me.usuario_id=$1 AND me.activo
         WHERE s.negocio_id=$2 GROUP BY s.estado`,[req.usuario.id,req.usuario.negocio_id]),
       this.bd.consulta(`SELECT u.id,u.nombre,u.correo,u.activo,u.disponible,u.presencia_en,
-        (u.disponible AND u.presencia_en>now()-interval '2 minutes' AND u.activo) AS elegible
+        u.activo AS elegible
         FROM usuarios u JOIN miembros_equipo me ON me.usuario_id=u.id AND me.activo
         WHERE me.equipo_id IN(SELECT equipo_id FROM miembros_equipo WHERE usuario_id=$1 AND activo) AND u.rol='asesor' ORDER BY u.nombre`,[req.usuario.id]),
       this.bd.consulta(`SELECT u.nombre,j.fecha_local,c.solicitudes_reales,c.contador_ajustado,c.ajustes_nivelacion,

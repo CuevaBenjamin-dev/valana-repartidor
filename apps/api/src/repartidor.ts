@@ -41,7 +41,7 @@ export class Repartidor {
       FROM usuarios u JOIN miembros_equipo m ON m.usuario_id=u.id
       JOIN contadores_jornada cj ON cj.usuario_id=u.id AND cj.jornada_id=$2
       WHERE m.equipo_id=$1 AND u.rol='asesor' AND u.activo AND m.activo
-      AND u.disponible AND u.presencia_en>now()-interval '2 minutes' ORDER BY u.id`,[equipoId,jornadaId]);
+      ORDER BY u.id`,[equipoId,jornadaId]);
     const participantes=horario?r.rows:[];
     const actuales=participantes.filter(x=>x.elegible_anterior);
     const minimo=actuales.length?Math.min(...actuales.map(x=>x.contador_ajustado)):0;
@@ -253,7 +253,7 @@ export class Repartidor {
       'SELECT disponible,presencia_en FROM usuarios WHERE id=$1',[usuarioId])).rows[0];
     if(!previo)return;
     const cambioManual=disponible!==undefined && disponible!==previo.disponible;
-    const regreso=(disponible??previo.disponible) && (!previo.presencia_en || Date.now()-new Date(previo.presencia_en).getTime()>120000);
+    const regreso=!previo.presencia_en || Date.now()-new Date(previo.presencia_en).getTime()>120000;
     if(!cambioManual && !regreso){
       await this.bd.consulta('UPDATE usuarios SET presencia_en=now() WHERE id=$1',[usuarioId]);
       return;
